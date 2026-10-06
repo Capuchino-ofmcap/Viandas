@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#B5241D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Viandas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Resumen · Viandas Fiesta Familiar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .resumen-ofrendas {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 8px;
+    border: 1px solid rgba(255,255,255,.4);
+    border-radius: 8px;
+    background: rgba(255,255,255,.16);
+    font-size: 12px;
+  }
+  .resumen-ofrendas strong { color: var(--dorado); font-size: 15px; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button>
+      <div class="marca" style="font-size:16px;">Resumen</div>
+      <a href="menu.html" class="back-link" title="Volver al menú"><span aria-hidden="true">🏠</span> Menú</a>
+    </div>
+
+    <main class="contenido resumen-pagina">
+      <div class="productos-cabecera">
+        <div>
+          <div class="titulo-seccion">Resumen de ventas</div>
+          <div class="subtitulo">Consulta las unidades vendidas y los distintos precios de cada producto.</div>
+        </div>
+      </div>
+
+      <div class="resumen-filtro campo">
+        <label for="filtroUsuario">Mostrar ventas de</label>
+        <select id="filtroUsuario">
+          <option value="">Todos los usuarios</option>
+        </select>
+      </div>
+
+      <section class="resumen-total tarjeta" aria-labelledby="totalTitulo">
+        <div class="resumen-total-info">
+          <div class="resumen-total-etiqueta" id="totalTitulo">Total recaudado</div>
+          <div class="resumen-total-unidades">
+            <strong id="totalUnidades">0</strong>
+            <span class="resumen-unidades-texto">
+              <span>unidades</span>
+              <span>vendidas</span>
+            </span>
+          </div>
+        </div>
+        <div class="resumen-total-monto" id="totalRecaudado">S/. 0.00</div>
+        <div class="resumen-pagos" aria-label="Resumen por forma de pago">
+          <div class="resumen-pago resumen-pago-efectivo">
+            <span>Efectivo</span>
+            <strong id="totalEfectivo">S/. 0.00</strong>
+            <small id="unidadesEfectivo">0 unidades</small>
+          </div>
+          <div class="resumen-pago resumen-pago-yape">
+            <span>Yape / Plin</span>
+            <strong id="totalYape">S/. 0.00</strong>
+            <small id="unidadesYape">0 unidades</small>
+          </div>
+          <div class="resumen-ofrendas">
+            <span>Total ofrendado</span>
+            <strong id="totalOfrendas">S/. 0.00</strong>
+          </div>
+        </div>
+      </section>
+
+      <div class="resumen-lista-cabecera">
+        <div class="titulo-seccion">Productos vendidos</div>
+        <span class="contador-productos" id="contadorProductos">0 productos</span>
+      </div>
+      <div id="listaResumen" class="resumen-lista">
+        <div class="cargando">⌛ Cargando resumen...</div>
+      </div>
+    </main>
+  </div>
+
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-perfil">
+      <div class="drawer-avatar" id="drawerInicial">?</div>
+      <div>
+        <div class="drawer-nombre" id="drawerNombre">Invitado</div>
+        <div class="drawer-etiqueta">Pedidos de hoy</div>
+      </div>
+    </div>
+    <nav class="drawer-nav">
+      <a href="menu.html">🍽️ Menú</a>
+      <a href="usuario.html">🔄 Cambiar usuario / pago</a>
+      <a href="productos.html">🧾 Gestionar productos</a>
+      <a href="resumen.html" class="activo">📋 Resumen</a>
+      <a href="cambios.html">🔁 Cambios y devoluciones</a>
+      <a href="historial.html">🕘 Historial</a>
+      <a href="reportes.html">📊 Reportes</a>
+    </nav>
+    <div class="drawer-pie">
+      <button class="btn btn-fantasma" style="width:100%; text-align:left;" onclick="cerrarSesion()">Cerrar sesión en este dispositivo</button>
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    exigirSesion();
+
+    const filtroUsuario = document.getElementById('filtroUsuario');
+    const listaResumen = document.getElementById('listaResumen');
+    const totalRecaudado = document.getElementById('totalRecaudado');
+    const totalUnidades = document.getElementById('totalUnidades');
+    const totalEfectivo = document.getElementById('totalEfectivo');
+    const totalYape = document.getElementById('totalYape');
+    const totalOfrendas = document.getElementById('totalOfrendas');
+    const unidadesEfectivo = document.getElementById('unidadesEfectivo');
+    const unidadesYape = document.getElementById('unidadesYape');
+    const contadorProductos = document.getElementById('contadorProductos');
+
+    function escapeHtml(valor) {
+      return String(valor ?? '').replace(/[&<>'"]/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[caracter]));
+    }
+
+    function formatearPrecio(precio) {
+      return 'S/. ' + Number(precio || 0).toFixed(2);
+    }
+
+    function cargarUsuarios(usuarios) {
+      const opciones = usuarios
+        .slice()
+        .sort((a, b) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' }));
+      filtroUsuario.innerHTML = '<option value="">Todos los usuarios</option>' + opciones
+        .map(usuario => `<option value="${escapeHtml(usuario)}">${escapeHtml(usuario)}</option>`)
+        .join('');
+    }
+
+    function renderResumen(datos) {
+      totalRecaudado.textContent = formatearPrecio(datos.totalRecaudado);
+      totalUnidades.textContent = Number(datos.totalUnidades || 0);
+      const formasPago = datos.formasPago || {};
+      const efectivo = formasPago.efectivo || {};
+      const yape = formasPago.yape || {};
+      totalEfectivo.textContent = formatearPrecio(efectivo.totalRecaudado);
+      totalYape.textContent = formatearPrecio(yape.totalRecaudado);
+      totalOfrendas.textContent = formatearPrecio(datos.totalOfrendas);
+      unidadesEfectivo.textContent = Number(efectivo.totalUnidades || 0) + ' unidades';
+      unidadesYape.textContent = Number(yape.totalUnidades || 0) + ' unidades';
+      const productos = datos.productos || [];
+      contadorProductos.textContent = productos.length + (productos.length === 1 ? ' producto' : ' productos');
+
+      if (productos.length === 0) {
+        listaResumen.innerHTML = '<div class="cargando">No hay ventas para este filtro.</div>';
+        return;
+      }
+
+      listaResumen.innerHTML = productos.map(producto => `
+        <article class="resumen-producto tarjeta">
+          <div class="resumen-producto-cabecera">
+            <div>
+              <h3>${escapeHtml(producto.producto)}</h3>
+              <span>${producto.totalUnidades} ${producto.totalUnidades === 1 ? 'unidad vendida' : 'unidades vendidas'}</span>
+            </div>
+            <strong>${formatearPrecio(producto.totalRecaudado)}</strong>
+          </div>
+          <div class="resumen-precios">
+            ${(producto.precios || []).map(detalle => `
+              <div class="resumen-precio">
+                <span>${formatearPrecio(detalle.precio)}</span>
+                <span>${detalle.unidades} ${detalle.unidades === 1 ? 'unidad' : 'unidades'}</span>
+                <strong>${formatearPrecio(detalle.subtotal)}</strong>
+              </div>
+            `).join('')}
+          </div>
+        </article>
+      `).join('');
+    }
+
+    async function cargarResumen() {
+      return cargarResumenPorUsuario(filtroUsuario.value);
+    }
+
+    async function cargarResumenPorUsuario(usuario) {
+      listaResumen.innerHTML = '<div class="cargando">⌛ Cargando resumen...</div>';
+      totalRecaudado.textContent = 'S/. 0.00';
+      totalUnidades.textContent = '0';
+      totalEfectivo.textContent = 'S/. 0.00';
+      totalYape.textContent = 'S/. 0.00';
+      totalOfrendas.textContent = 'S/. 0.00';
+      unidadesEfectivo.textContent = '0 unidades';
+      unidadesYape.textContent = '0 unidades';
+      contadorProductos.textContent = '0 productos';
+      try {
+        const datos = await apiGet('resumen', { usuario: usuario || '' }, 1, null, 0);
+        cargarUsuarios(datos.usuarios || []);
+        filtroUsuario.value = datos.usuario || '';
+        renderResumen(datos);
+      } catch (err) {
+        listaResumen.innerHTML = `<div class="cargando">❌ ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function cerrarSesion() {
+      if (confirm('¿Cerrar sesión en este dispositivo?')) {
+        Sesion.cerrar();
+        window.location.href = 'index.html';
+      }
+    }
+
+    filtroUsuario.addEventListener('change', cargarResumen);
+    iniciarCajonNavegacion();
+    cargarResumenPorUsuario(Sesion.getNombre());
+  </script>
+</body>
+</html>

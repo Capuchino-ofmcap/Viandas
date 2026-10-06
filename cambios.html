@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#B5241D">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Viandas">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <title>Cambios y devoluciones · Viandas Fiesta Familiar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+      .cambios-pagina { padding-top: 18px; padding-bottom: 28px; }
+      .cambios-intro .subtitulo { margin-bottom: 14px; }
+      .cambios-panel {
+        padding: 12px;
+        margin-bottom: 14px;
+        border: 1px solid var(--borde);
+        border-radius: 12px;
+        background: var(--crema);
+        box-shadow: var(--sombra);
+      }
+      .cambios-pestanas {
+        position: sticky;
+        top: 54px;
+        z-index: 14;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin: -12px -12px 12px;
+        padding: 12px 12px 0;
+        background: var(--crema);
+      }
+      .cambios-pestana {
+        min-height: 42px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 7px;
+        border: 1.5px solid var(--borde);
+        border-radius: 9px;
+        background: white;
+        color: var(--carbon-suave);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .cambios-pestana.activa { border-color: var(--rojo); background: var(--rojo); color: white; }
+      .cambios-pestana span { font-size: 17px; }
+      .cambios-lista-cabecera { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+      .cambios-lista-cabecera h2 { font-size: 16px; }
+      .cambios-lista-cabecera span { color: var(--carbon-suave); font-size: 12px; white-space: nowrap; }
+      .cambios-producto { align-items: flex-start; gap: 10px; }
+      .cambios-producto-acciones { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 6px; }
+      .cambios-producto-acciones .controles-cantidad { gap: 5px; }
+      .cambios-precio-campo { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--carbon-suave); font-size: 11px; }
+      .cambios-precio-campo input {
+        width: 76px;
+        padding: 5px 6px;
+        border: 1px solid var(--borde);
+        border-radius: 6px;
+        background: white;
+        color: var(--carbon);
+        font: inherit;
+        font-size: 12px;
+      }
+      .cambios-precio-pasos { display: grid; grid-template-rows: 13px 13px; gap: 2px; }
+      .cambios-precio-paso {
+        width: 20px;
+        padding: 0;
+        border: 1px solid var(--borde);
+        border-radius: 4px;
+        background: white;
+        color: var(--carbon-suave);
+        font: inherit;
+        font-size: 10px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .cambios-precio-paso:hover { border-color: var(--rojo); color: var(--rojo); }
+      .cambios-reponer { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--carbon-suave); font-size: 11px; font-weight: 500; white-space: nowrap; }
+      .cambios-reponer input { width: auto; margin: 0; accent-color: var(--verde); }
+      .cambios-ofrenda { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--carbon); font-size: 11px; font-weight: 600; }
+      .cambios-ofrenda[hidden] { display: none; }
+      .cambios-ofrenda input { width: auto; margin: 0; accent-color: var(--rojo); }
+      .cambios-vacio { padding: 18px 8px; color: var(--carbon-suave); font-size: 14px; text-align: center; }
+      .cambios-cierre { position: sticky; bottom: 0; z-index: 10; margin-top: 14px; box-shadow: 0 -4px 12px rgba(43, 33, 28, 0.12); }
+      .cambios-cierre > .btn { width: 100%; }
+      .cambios-modal[hidden] { display: none; }
+      .cambios-modal { align-items: center; padding: 16px; }
+      .cambios-modal .modal-caja { width: min(440px, 100%); max-height: 88vh; border-radius: 14px; padding: 20px; }
+      .cambios-modal-lista { max-height: 34vh; overflow-y: auto; margin: 12px 0; }
+      .cambios-modal-grupo { margin-top: 12px; }
+      .cambios-modal-grupo h4 { margin-bottom: 5px; font-size: 13px; }
+      .cambios-modal-mensaje { margin-top: 12px; }
+      .cambios-modal-historial { display: block; margin-top: 12px; color: var(--rojo-oscuro); font-size: 13px; font-weight: 700; text-align: center; }
+      .cambios-modal-historial[hidden] { display: none; }
+      .cambios-modal .fila-botones { margin-top: 16px; }
+      .cambios-modal .fila-botones .btn { min-width: 0; }
+      @media (max-width: 380px) {
+        .cambios-panel { padding: 10px; }
+        .cambios-producto { gap: 7px; padding: 9px; }
+        .cambios-precio-campo input { width: 68px; }
+        .cambios-lista-cabecera h2 { font-size: 14px; }
+      }
+    </style>
+    </head>
+<body>
+  <div class="app">
+    <div class="header">
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button>
+      <div class="marca" style="font-size:16px;">Cambios</div>
+      <a href="menu.html" class="back-link" title="Volver al menú"><span aria-hidden="true">🏠</span> Menú</a>
+    </div>
+
+    <main class="contenido ajustes-pagina cambios-pagina">
+      <div class="productos-cabecera cambios-intro">
+        <div>
+          <div class="titulo-seccion">Registrar cambio o devolución</div>
+          <div class="subtitulo">Marca lo que devuelve y lo que se lleva el cliente. Revisa el saldo antes de confirmar.</div>
+        </div>
+      </div>
+
+      <div id="avisoAjuste" aria-live="polite"></div>
+
+      <section class="cambios-panel" aria-label="Productos del cambio">
+        <div class="cambios-pestanas" role="group" aria-label="Tipo de movimiento">
+          <button class="cambios-pestana activa" type="button" data-modo="devueltos" aria-pressed="true"><span aria-hidden="true">↩</span> Devuelve</button>
+          <button class="cambios-pestana" type="button" data-modo="nuevos" aria-pressed="false"><span aria-hidden="true">＋</span> Se lleva</button>
+        </div>
+        <div class="cambios-lista-cabecera">
+          <h2 id="tituloListaCambio">Productos que devuelve</h2>
+          <span id="contadorProductosCambio">Cargando...</span>
+        </div>
+        <div id="productosCambio" class="cambios-productos" aria-live="polite">
+          <div class="cargando">⌛ Cargando productos...</div>
+        </div>
+      </section>
+
+      <section class="ajuste-seccion tarjeta ajuste-cierre cambios-cierre">
+        <div class="ajuste-cierre-fila">
+          <span>Productos devueltos</span><strong id="totalDevuelto">S/. 0.00</strong>
+        </div>
+        <div class="ajuste-cierre-fila">
+          <span>Productos nuevos</span><strong id="totalNuevo">S/. 0.00</strong>
+        </div>
+        <div class="ajuste-cierre-total">
+          <span id="etiquetaDiferencia">Total a pagar</span>
+          <label class="cambios-ofrenda" hidden>(<input id="diferenciaTipo" type="checkbox"> Deja como ofrenda)</label>
+          <strong id="diferenciaAjuste">S/. 0.00</strong>
+        </div>
+        <button class="btn btn-primario" id="btnConfirmarAjuste" type="button" disabled>Revisar operación</button>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-fondo cambios-modal" id="modalRevisionCambio" hidden>
+    <section class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="tituloRevisionCambio">
+      <h3 id="tituloRevisionCambio">Revisa la operación</h3>
+      <div id="resumenRevisionCambio" class="cambios-modal-lista"></div>
+      <div class="resumen-total">
+        <span id="etiquetaRevisionCambio">Total a pagar</span>
+        <strong id="totalRevisionCambio">S/. 0.00</strong>
+      </div>
+      <div id="mensajeRevisionCambio" class="cambios-modal-mensaje" role="status" hidden></div>
+      <a class="cambios-modal-historial" id="linkHistorialCambio" href="historial.html" hidden>Ver Historial</a>
+      <div class="fila-botones">
+        <button class="btn btn-secundario" id="btnEditarCambio" type="button">Volver a editar</button>
+        <button class="btn btn-primario" id="btnEnviarCambio" type="button">Confirmar y guardar</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-perfil">
+      <div class="drawer-avatar" id="drawerInicial">?</div>
+      <div>
+        <div class="drawer-nombre" id="drawerNombre">Invitado</div>
+        <div class="drawer-etiqueta">Pedidos de hoy</div>
+      </div>
+    </div>
+    <nav class="drawer-nav">
+      <a href="menu.html">🍽️ Menú</a>
+      <a href="usuario.html">🔄 Cambiar usuario / pago</a>
+      <a href="productos.html">🧾 Gestionar productos</a>
+      <a href="resumen.html">📋 Resumen</a>
+      <a href="cambios.html" class="activo">🔁 Cambios y devoluciones</a>
+      <a href="historial.html">🕘 Historial</a>
+      <a href="reportes.html">📊 Reportes</a>
+    </nav>
+    <div class="drawer-pie">
+      <button class="btn btn-fantasma" style="width:100%; text-align:left;" onclick="cerrarSesion()">Cerrar sesión en este dispositivo</button>
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    exigirSesion();
+
+    let menuProductos = [];
+    let modoCambio = 'devueltos';
+    const selecciones = { devueltos: new Map(), nuevos: new Map() };
+    const productosCambio = document.getElementById('productosCambio');
+    const tituloListaCambio = document.getElementById('tituloListaCambio');
+    const contadorProductosCambio = document.getElementById('contadorProductosCambio');
+    const totalDevuelto = document.getElementById('totalDevuelto');
+    const totalNuevo = document.getElementById('totalNuevo');
+    const diferenciaAjuste = document.getElementById('diferenciaAjuste');
+    const etiquetaDiferencia = document.getElementById('etiquetaDiferencia');
+    const diferenciaTipo = document.getElementById('diferenciaTipo');
+    const btnConfirmarAjuste = document.getElementById('btnConfirmarAjuste');
+    const modalRevisionCambio = document.getElementById('modalRevisionCambio');
+    const tituloRevisionCambio = document.getElementById('tituloRevisionCambio');
+    const resumenRevisionCambio = document.getElementById('resumenRevisionCambio');
+    const etiquetaRevisionCambio = document.getElementById('etiquetaRevisionCambio');
+    const totalRevisionCambio = document.getElementById('totalRevisionCambio');
+    const mensajeRevisionCambio = document.getElementById('mensajeRevisionCambio');
+    const btnEditarCambio = document.getElementById('btnEditarCambio');
+    const btnEnviarCambio = document.getElementById('btnEnviarCambio');
+    const linkHistorialCambio = document.getElementById('linkHistorialCambio');
+    let operacionPendiente = null;
+    let envioEnCurso = false;
+    let operacionGuardada = false;
+    let respuestaIncierta = false;
+
+    function escapeHtml(valor) {
+      return String(valor ?? '').replace(/[&<>'"]/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[caracter]));
+    }
+
+    function formatearPrecio(precio) {
+      return 'S/. ' + Number(precio || 0).toFixed(2);
+    }
+
+    function claveProducto(nombre) {
+      return String(nombre || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es');
+    }
+
+    function obtenerSeleccion(tipo, producto) {
+      const nombre = String(producto.Producto || '');
+      let seleccion = selecciones[tipo].get(nombre);
+      if (!seleccion) {
+        seleccion = { cantidad: 0, precio: Number(producto.Precio) || 0, reponerStock: false };
+        selecciones[tipo].set(nombre, seleccion);
+      }
+      return seleccion;
+    }
+
+    function leerSeleccion(tipo) {
+      return [...selecciones[tipo].entries()]
+        .filter(([, seleccion]) => seleccion.cantidad > 0)
+        .map(([producto, seleccion]) => ({
+          producto,
+          cantidad: seleccion.cantidad,
+          precio: Number(seleccion.precio) || 0,
+          reponerStock: tipo === 'devueltos' && seleccion.reponerStock
+        }));
+    }
+
+    function renderProductos() {
+      const esDevolucion = modoCambio === 'devueltos';
+      const filtrados = esDevolucion
+        ? menuProductos
+        : menuProductos.filter(producto => Math.max(0, Math.floor(Number(producto.Stock) || 0)) > 0);
+      tituloListaCambio.textContent = esDevolucion ? 'Productos que devuelve el cliente' : 'Productos que se lleva el cliente';
+      contadorProductosCambio.textContent = `${filtrados.length} ${filtrados.length === 1 ? 'producto' : 'productos'}`;
+
+      document.querySelectorAll('[data-modo]').forEach(boton => {
+        const activo = boton.dataset.modo === modoCambio;
+        boton.classList.toggle('activa', activo);
+        boton.setAttribute('aria-pressed', String(activo));
+      });
+
+      if (filtrados.length === 0) {
+        productosCambio.innerHTML = '<div class="cambios-vacio">No hay productos disponibles.</div>';
+        return;
+      }
+
+      const categorias = new Map();
+      filtrados.forEach(producto => {
+        const categoria = String(producto['Categoría'] || 'General').trim() || 'General';
+        if (!categorias.has(categoria)) categorias.set(categoria, []);
+        categorias.get(categoria).push(producto);
+      });
+
+      productosCambio.innerHTML = '';
+      [...categorias.keys()].sort((a, b) => b.localeCompare(a, 'es', { sensitivity: 'base' })).forEach(categoria => {
+        const grupo = document.createElement('section');
+        grupo.className = 'categoria';
+        const encabezado = document.createElement('div');
+        encabezado.className = 'categoria-titulo';
+        encabezado.textContent = categoria;
+        grupo.appendChild(encabezado);
+
+        categorias.get(categoria)
+          .sort((a, b) => String(a.Producto || '').localeCompare(String(b.Producto || ''), 'es', { sensitivity: 'base' }))
+          .forEach(producto => {
+            const nombre = String(producto.Producto || '');
+            const seleccion = obtenerSeleccion(modoCambio, producto);
+            const stock = Math.max(0, Math.floor(Number(producto.Stock) || 0));
+            const disponible = esDevolucion ? stock : Math.max(0, stock - seleccion.cantidad);
+            const claseStock = disponible <= 3 ? 'bajo' : disponible <= 6 ? 'medio' : 'alto';
+            const nombreSeguro = escapeHtml(nombre);
+            const tarjetaProducto = document.createElement('article');
+            tarjetaProducto.className = 'item-menu cambios-producto';
+            tarjetaProducto.innerHTML = `
+              <div class="item-info">
+                <div class="item-nombre-row">
+                  <span class="item-nombre">${nombreSeguro}</span>
+                  <span class="item-stock ${claseStock}">${esDevolucion ? 'En stock: ' + disponible : 'Quedan: ' + disponible}</span>
+                </div>
+                <div class="item-precio">${formatearPrecio(producto.Precio)}</div>
+              </div>
+              <div class="cambios-producto-acciones">
+                <div class="controles-cantidad">
+                  <button class="btn-circular" type="button" data-cambio-accion="restar" data-producto="${nombreSeguro}" aria-label="Quitar una unidad de ${nombreSeguro}" ${seleccion.cantidad <= 0 ? 'disabled' : ''}>−</button>
+                  <span class="cantidad">${seleccion.cantidad}</span>
+                  <button class="btn-circular" type="button" data-cambio-accion="sumar" data-producto="${nombreSeguro}" aria-label="Agregar una unidad de ${nombreSeguro}" ${!esDevolucion && seleccion.cantidad >= stock ? 'disabled' : ''}>+</button>
+                </div>
+                ${seleccion.cantidad > 0 && esDevolucion ? `
+                  <div class="cambios-precio-campo"><span>Precio</span>
+                    <input class="cambios-precio" type="text" inputmode="decimal" value="${Math.max(0, Number(seleccion.precio) || 0).toFixed(2)}" data-precio-producto="${nombreSeguro}" aria-label="Precio unitario de ${nombreSeguro}">
+                    <span class="cambios-precio-pasos">
+                      <button class="cambios-precio-paso" type="button" data-precio-paso="0.5" data-producto="${nombreSeguro}" aria-label="Aumentar precio de ${nombreSeguro} en 0.50">+</button>
+                      <button class="cambios-precio-paso" type="button" data-precio-paso="-0.5" data-producto="${nombreSeguro}" aria-label="Disminuir precio de ${nombreSeguro} en 0.50">−</button>
+                    </span>
+                  </div>
+                  <label class="cambios-reponer"><input type="checkbox" class="cambios-reponer-check" data-reponer-producto="${nombreSeguro}" ${seleccion.reponerStock ? 'checked' : ''}> Reponer al stock</label>
+                ` : ''}
+              </div>`;
+            grupo.appendChild(tarjetaProducto);
+          });
+        productosCambio.appendChild(grupo);
+      });
+    }
+
+    function actualizarTotales() {
+      const devueltos = leerSeleccion('devueltos');
+      const nuevos = leerSeleccion('nuevos');
+      const devuelto = devueltos.reduce((total, item) => total + item.cantidad * item.precio, 0);
+      const nuevo = nuevos.reduce((total, item) => total + item.cantidad * item.precio, 0);
+      const diferencia = nuevo - devuelto;
+      totalDevuelto.textContent = '- ' + formatearPrecio(devuelto);
+      totalNuevo.textContent = formatearPrecio(nuevo);
+      diferenciaAjuste.textContent = formatearPrecio(Math.abs(diferencia));
+      etiquetaDiferencia.textContent = diferencia > 0 ? 'Total a pagar' : diferencia < 0 ? 'Total a devolver' : 'Sin diferencia';
+      diferenciaTipo.closest('.cambios-ofrenda').hidden = diferencia >= 0;
+      if (diferencia >= 0) diferenciaTipo.checked = false;
+      btnConfirmarAjuste.disabled = devueltos.length + nuevos.length === 0;
+    }
+
+    function mostrarAviso(texto, tipo) {
+      document.getElementById('avisoAjuste').innerHTML = `<div class="aviso aviso-${tipo}">${escapeHtml(texto)}</div>`;
+    }
+
+    async function cargarMenuProductos() {
+      try {
+        const datos = await apiGet('menu', {}, 1, CLAVE_CACHE_MENU, TTL_CACHE_MENU);
+        menuProductos = (datos.menu || []).filter(producto => producto.Producto);
+        if (menuProductos.length === 0) throw new Error('No hay productos disponibles.');
+        renderProductos();
+        actualizarTotales();
+      } catch (err) {
+        mostrarAviso('No se pudieron cargar los productos: ' + err.message, 'error');
+        btnConfirmarAjuste.disabled = true;
+      }
+    }
+
+    document.querySelectorAll('[data-modo]').forEach(boton => {
+      boton.addEventListener('click', () => {
+        modoCambio = boton.dataset.modo;
+        renderProductos();
+      });
+    });
+
+    productosCambio.addEventListener('click', event => {
+      const botonPrecio = event.target.closest('[data-precio-paso]');
+      if (botonPrecio) {
+        const productoPrecio = menuProductos.find(item => item.Producto === botonPrecio.dataset.producto);
+        if (!productoPrecio) return;
+        const seleccionPrecio = obtenerSeleccion(modoCambio, productoPrecio);
+        seleccionPrecio.precio = Math.max(0, (Number(seleccionPrecio.precio) || 0) + Number(botonPrecio.dataset.precioPaso));
+        const campoPrecio = [...productosCambio.querySelectorAll('.cambios-precio')]
+          .find(campo => campo.dataset.precioProducto === productoPrecio.Producto);
+        if (campoPrecio) campoPrecio.value = seleccionPrecio.precio.toFixed(2);
+        actualizarTotales();
+        return;
+      }
+      const boton = event.target.closest('[data-cambio-accion]');
+      if (!boton) return;
+      const producto = menuProductos.find(item => item.Producto === boton.dataset.producto);
+      if (!producto) return;
+      const seleccion = obtenerSeleccion(modoCambio, producto);
+      if (boton.dataset.cambioAccion === 'sumar') {
+        const stock = Math.max(0, Math.floor(Number(producto.Stock) || 0));
+        if (modoCambio === 'nuevos' && seleccion.cantidad >= stock) return;
+        seleccion.cantidad += 1;
+      } else {
+        seleccion.cantidad = Math.max(0, seleccion.cantidad - 1);
+      }
+      renderProductos();
+      actualizarTotales();
+    });
+
+    productosCambio.addEventListener('input', event => {
+      if (!event.target.matches('.cambios-precio')) return;
+      const producto = menuProductos.find(item => item.Producto === event.target.dataset.precioProducto);
+      if (!producto) return;
+      const valorPrecio = Number(String(event.target.value).replace(',', '.')) || 0;
+      obtenerSeleccion(modoCambio, producto).precio = Math.max(0, valorPrecio);
+      actualizarTotales();
+    });
+
+    productosCambio.addEventListener('focusin', event => {
+      if (event.target.matches('.cambios-precio')) event.target.select();
+    });
+
+    productosCambio.addEventListener('change', event => {
+      if (!event.target.matches('.cambios-reponer-check')) return;
+      const producto = menuProductos.find(item => item.Producto === event.target.dataset.reponerProducto);
+      if (!producto) return;
+      obtenerSeleccion('devueltos', producto).reponerStock = event.target.checked;
+    });
+
+    async function refrescarStockCambio() {
+      try {
+        const datos = await apiGet('stock', { _ts: Date.now() }, 0, null, 0);
+        if (!Array.isArray(datos.stock)) return;
+        const stockPorProducto = new Map(datos.stock.map(item => [claveProducto(item.Producto), Math.max(0, Math.floor(Number(item.Stock) || 0))]));
+        menuProductos = menuProductos.map(producto => ({
+          ...producto,
+          Stock: stockPorProducto.get(claveProducto(producto.Producto)) ?? producto.Stock
+        }));
+        renderProductos();
+      } catch (_) {
+        // Se conserva el stock mostrado si la actualización no está disponible.
+      }
+    }
+
+    function abrirRevisionCambio() {
+      const devueltos = leerSeleccion('devueltos');
+      const nuevos = leerSeleccion('nuevos');
+      if (devueltos.length === 0 && nuevos.length === 0) {
+        mostrarAviso('Agrega al menos un producto devuelto o nuevo.', 'error');
+        return;
+      }
+
+      const totalDevueltoActual = devueltos.reduce((total, item) => total + item.cantidad * item.precio, 0);
+      const totalNuevoActual = nuevos.reduce((total, item) => total + item.cantidad * item.precio, 0);
+      const diferencia = totalNuevoActual - totalDevueltoActual;
+      operacionPendiente = {
+        usuario: Sesion.getNombre(),
+        formaPago: Sesion.getPago(),
+        diferenciaTipo: diferencia < 0 && diferenciaTipo.checked ? 'ofrenda' : diferencia < 0 ? 'devolver' : '',
+        devueltos,
+        nuevos
+      };
+
+      const grupos = [
+        { titulo: 'Devuelve', items: devueltos, signo: '− ' },
+        { titulo: 'Se lleva', items: nuevos, signo: '' }
+      ].filter(grupo => grupo.items.length > 0);
+      resumenRevisionCambio.innerHTML = grupos.map(grupo => `
+        <div class="cambios-modal-grupo">
+          <h4>${grupo.titulo}</h4>
+          ${grupo.items.map(item => `
+            <div class="resumen-item">
+              <span>${item.cantidad} × ${escapeHtml(item.producto)}${item.reponerStock ? ' · repone stock' : ''}</span>
+              <span>${grupo.signo}${formatearPrecio(item.cantidad * item.precio)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+      etiquetaRevisionCambio.textContent = diferencia > 0 ? 'Total a pagar' : diferencia < 0 ? 'Total a devolver' : 'Sin diferencia';
+      totalRevisionCambio.textContent = formatearPrecio(Math.abs(diferencia));
+      tituloRevisionCambio.textContent = 'Revisa la operación';
+      mensajeRevisionCambio.hidden = true;
+      btnEditarCambio.hidden = false;
+      btnEditarCambio.textContent = 'Volver a editar';
+      btnEditarCambio.disabled = false;
+      btnEnviarCambio.hidden = false;
+      btnEnviarCambio.disabled = false;
+      btnEnviarCambio.textContent = 'Confirmar y guardar';
+      linkHistorialCambio.hidden = true;
+      operacionGuardada = false;
+      respuestaIncierta = false;
+      modalRevisionCambio.hidden = false;
+      btnEnviarCambio.focus();
+    }
+
+    function cerrarRevisionCambio() {
+      if (envioEnCurso) return;
+      modalRevisionCambio.hidden = true;
+      if (operacionGuardada) {
+        operacionPendiente = null;
+        operacionGuardada = false;
+      }
+    }
+
+    function firmaItemsOperacion(items) {
+      return items.map(item => [
+        claveProducto(item.producto),
+        Number(item.cantidad) || 0,
+        Math.round((Number(item.precio) || 0) * 100)
+      ].join('|')).sort().join('~');
+    }
+
+    async function buscarOperacionEnHistorial(payload, inicioEnvio) {
+      const datos = await apiGet('historial', { usuario: payload.usuario, _ts: Date.now() }, 0, null, 0);
+      const esperados = [
+        ...payload.devueltos.map(item => ({ ...item, cantidad: -Math.abs(Number(item.cantidad) || 0) })),
+        ...payload.nuevos.map(item => ({ ...item, cantidad: Math.abs(Number(item.cantidad) || 0) }))
+      ];
+      const firmaEsperada = firmaItemsOperacion(esperados);
+      return (datos.operaciones || []).find(operacion => {
+        const fecha = new Date(operacion.fecha).getTime();
+        if (!Number.isFinite(fecha) || fecha < inicioEnvio - 120000 || fecha > Date.now() + 120000) return false;
+        if (claveProducto(operacion.usuario) !== claveProducto(payload.usuario)) return false;
+        if (claveProducto(operacion.formaPago) !== claveProducto(payload.formaPago)) return false;
+        const items = (operacion.items || []).filter(item => claveProducto(item.producto) !== 'ofrenda');
+        return items.length === esperados.length && firmaItemsOperacion(items) === firmaEsperada;
+      });
+    }
+
+    function mostrarOperacionGuardada(resultado, verificadaEnHistorial = false) {
+      const totalOperacion = Number(resultado.totalOperacion) || 0;
+      const esOfrenda = operacionPendiente.diferenciaTipo === 'ofrenda' && totalOperacion === 0;
+      const mensaje = esOfrenda
+        ? 'Guardado. El saldo a devolver quedó como ofrenda.'
+        : totalOperacion > 0
+          ? 'Guardado. El cliente debe pagar ' + formatearPrecio(totalOperacion) + '.'
+          : totalOperacion < 0
+            ? 'Guardado. Devolver ' + formatearPrecio(-totalOperacion) + '.'
+            : 'Guardado sin diferencia.';
+      tituloRevisionCambio.textContent = 'Operación guardada';
+      mensajeRevisionCambio.className = 'aviso aviso-exito cambios-modal-mensaje';
+      mensajeRevisionCambio.textContent = mensaje + (verificadaEnHistorial ? ' Confirmado automáticamente.' : '') + (resultado.operacionId ? ' Código: ' + resultado.operacionId : '');
+      mensajeRevisionCambio.hidden = false;
+      linkHistorialCambio.hidden = true;
+      btnEditarCambio.hidden = true;
+      btnEnviarCambio.hidden = false;
+      btnEnviarCambio.disabled = false;
+      btnEnviarCambio.textContent = 'Listo';
+      operacionGuardada = true;
+      respuestaIncierta = false;
+      selecciones.devueltos.clear();
+      selecciones.nuevos.clear();
+      renderProductos();
+      actualizarTotales();
+      void refrescarStockCambio();
+    }
+
+    btnConfirmarAjuste.addEventListener('click', abrirRevisionCambio);
+    btnEditarCambio.addEventListener('click', cerrarRevisionCambio);
+    modalRevisionCambio.addEventListener('click', event => {
+      if (event.target === modalRevisionCambio) cerrarRevisionCambio();
+    });
+
+    btnEnviarCambio.addEventListener('click', async () => {
+      if (envioEnCurso) return;
+      if (operacionGuardada) {
+        cerrarRevisionCambio();
+        return;
+      }
+      if (respuestaIncierta || !operacionPendiente) return;
+
+        envioEnCurso = true;
+        btnEnviarCambio.disabled = true;
+        btnEnviarCambio.textContent = 'Guardando una sola vez...';
+        btnEditarCambio.disabled = true;
+        const inicioEnvio = Date.now();
+        try {
+          const resultado = await apiPost('ajuste', operacionPendiente, 0);
+          if (!resultado || resultado.ok !== true) throw new Error((resultado && resultado.error) || 'El servidor no confirmó el guardado.');
+          mostrarOperacionGuardada(resultado);
+        } catch (err) {
+          const mensajeError = String(err && err.message ? err.message : err);
+          const rechazoSeguro = /No se encontró el producto|debe ser mayor que cero|No hay stock suficiente|operación está ocupada|app está ocupada|Agrega al menos/i.test(mensajeError);
+          if (rechazoSeguro) {
+            mensajeRevisionCambio.className = 'aviso aviso-error cambios-modal-mensaje';
+            mensajeRevisionCambio.textContent = mensajeError;
+            mensajeRevisionCambio.hidden = false;
+            btnEnviarCambio.textContent = 'Reintentar';
+          } else {
+            tituloRevisionCambio.textContent = 'Verificando el guardado';
+            mensajeRevisionCambio.className = 'aviso aviso-info cambios-modal-mensaje';
+            mensajeRevisionCambio.textContent = 'La respuesta está tardando. Verificando automáticamente si se guardó...';
+            mensajeRevisionCambio.hidden = false;
+            btnEnviarCambio.textContent = 'Verificando...';
+            try {
+              const operacion = await buscarOperacionEnHistorial(operacionPendiente, inicioEnvio);
+              if (!operacion) throw new Error('No se encontró la operación en el historial reciente.');
+              mostrarOperacionGuardada({ totalOperacion: operacion.total, operacionId: operacion.operacionId }, true);
+            } catch (_) {
+              respuestaIncierta = true;
+              mensajeRevisionCambio.className = 'aviso aviso-error cambios-modal-mensaje';
+              mensajeRevisionCambio.textContent = 'No pude verificarlo automáticamente. Antes de volver a enviarlo, revisa si quedó guardado.';
+              mensajeRevisionCambio.hidden = false;
+              linkHistorialCambio.hidden = false;
+              btnEnviarCambio.hidden = true;
+              btnEditarCambio.textContent = 'Cerrar';
+              btnConfirmarAjuste.disabled = true;
+            }
+          }
+        } finally {
+          envioEnCurso = false;
+          btnEditarCambio.disabled = false;
+          if (!operacionGuardada && !respuestaIncierta) btnEnviarCambio.disabled = false;
+        }
+      });
+
+      function cerrarSesion() {
+        if (confirm('¿Cerrar sesión en este dispositivo?')) {
+          Sesion.cerrar();
+          window.location.href = 'index.html';
+        }
+      }
+
+      iniciarCajonNavegacion();
+      cargarMenuProductos();
+    </script>
+  </body>
+  </html>

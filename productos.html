@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#B5241D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Viandas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Productos · Viandas Fiesta Familiar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button>
+      <div class="marca" style="font-size:16px;">Productos</div>
+      <a href="menu.html" class="back-link" title="Volver al menú"><span aria-hidden="true">🏠</span> Menú</a>
+    </div>
+
+    <div class="contenido">
+      <div class="productos-cabecera">
+        <div>
+          <div class="titulo-seccion">Catálogo de productos</div>
+          <div class="subtitulo">Agrega productos o toca uno para editar sus datos.</div>
+        </div>
+        <button class="btn btn-primario btn-icono-texto" id="btnMostrarAlta" type="button">＋ Agregar</button>
+      </div>
+
+      <div class="productos-herramientas">
+        <label class="buscador-productos" for="buscarProductos">
+          <span aria-hidden="true">⌕</span>
+          <input type="search" id="buscarProductos" placeholder="Buscar producto o categoría" autocomplete="off">
+        </label>
+        <span class="contador-productos" id="contadorProductos">0 productos</span>
+      </div>
+
+      <div id="avisoLista"></div>
+      <div id="listaProductos" class="productos-grid">
+        <div class="cargando">⌛ Cargando productos...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-fondo modal-producto" id="modalProducto" hidden>
+    <div class="modal-caja modal-producto-caja" role="dialog" aria-modal="true" aria-labelledby="modalProductoTitulo">
+      <div class="modal-producto-cabecera">
+        <div>
+          <div class="modal-kicker" id="modalProductoKicker">Nuevo producto</div>
+          <h3 id="modalProductoTitulo">Agregar producto</h3>
+        </div>
+        <button class="modal-cerrar" id="btnCerrarProducto" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <div id="avisoProducto"></div>
+      <form id="formProducto" novalidate>
+        <div class="campo">
+          <label for="productoNombre">Nombre</label>
+          <input type="text" id="productoNombre" placeholder="Ej: Arroz con pollo" required>
+        </div>
+        <div class="producto-form-grid">
+          <div class="campo">
+            <label for="productoPrecio">Precio (S/.)</label>
+            <input type="number" id="productoPrecio" min="0" step="1" inputmode="decimal" placeholder="15.00" required>
+          </div>
+          <div class="campo">
+            <label for="productoStock">Cantidad</label>
+            <input type="number" id="productoStock" min="0" step="1" inputmode="numeric" placeholder="10" required>
+          </div>
+        </div>
+        <div class="campo">
+          <label for="productoCategoria">Categoría</label>
+          <select id="productoCategoria" required>
+            <option value="Viandas Principales">Viandas Principales</option>
+            <option value="Postres y dulces">Postres y dulces</option>
+            <option value="Otros">Otros</option>
+          </select>
+        </div>
+        <div class="fila-botones modal-producto-acciones">
+          <button class="btn btn-secundario" id="btnCancelarProducto" type="button">Cancelar</button>
+          <button class="btn btn-primario" id="btnGuardarProducto" type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cajón de navegación -->
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-perfil">
+      <div class="drawer-avatar" id="drawerInicial">?</div>
+      <div>
+        <div class="drawer-nombre" id="drawerNombre">Invitado</div>
+        <div class="drawer-etiqueta">Pedidos de hoy</div>
+      </div>
+    </div>
+    <nav class="drawer-nav">
+      <a href="menu.html">🍽️ Menú</a>
+      <a href="usuario.html">🔄 Cambiar usuario / pago</a>
+      <a href="productos.html" class="activo">🧾 Gestionar productos</a>
+      <a href="resumen.html">📋 Resumen</a>
+      <a href="cambios.html">🔁 Cambios y devoluciones</a>
+      <a href="historial.html">🕘 Historial</a>
+      <a href="reportes.html">📊 Reportes</a>
+    </nav>
+    <div class="drawer-pie">
+      <button class="btn btn-fantasma" style="width:100%; text-align:left;" onclick="cerrarSesion()">Cerrar sesión en este dispositivo</button>
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    exigirSesion();
+
+    let productos = [];
+    let productoEditando = null;
+
+    const listaProductos = document.getElementById('listaProductos');
+    const buscarProductos = document.getElementById('buscarProductos');
+    const contadorProductos = document.getElementById('contadorProductos');
+    const modalProducto = document.getElementById('modalProducto');
+    const formProducto = document.getElementById('formProducto');
+    const btnGuardarProducto = document.getElementById('btnGuardarProducto');
+
+    function escapeHtml(valor) {
+      return String(valor ?? '').replace(/[&<>'"]/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[caracter]));
+    }
+
+    function formatearPrecio(precio) {
+      return 'S/. ' + Number(precio || 0).toFixed(2);
+    }
+
+    async function cargarProductos() {
+      try {
+        const datos = await apiGet('menu', {}, 1, CLAVE_CACHE_MENU, TTL_CACHE_MENU);
+        productos = (datos.menu || []).map(p => ({
+          ...p,
+          Stock: Number(p.Stock) || 0
+        })).sort((a, b) => String(a.Producto || '').localeCompare(
+          String(b.Producto || ''),
+          'es',
+          { sensitivity: 'base' }
+        ));
+        guardarCacheJSON(CLAVE_CACHE_MENU, { menu: productos }, TTL_CACHE_MENU);
+        renderProductos();
+      } catch (err) {
+        listaProductos.innerHTML = `<div class="cargando">❌ ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderProductos() {
+      const termino = buscarProductos.value.trim().toLowerCase();
+      const filtrados = productos.filter(producto =>
+        String(producto.Producto || '').toLowerCase().includes(termino) ||
+        String(producto.Categoría || '').toLowerCase().includes(termino)
+      );
+      contadorProductos.textContent = filtrados.length + (filtrados.length === 1 ? ' producto' : ' productos');
+      if (filtrados.length === 0) {
+        listaProductos.innerHTML = termino
+          ? '<div class="cargando">No hay resultados para esa búsqueda.</div>'
+          : '<div class="cargando">No hay productos todavía.</div>';
+        return;
+      }
+      listaProductos.innerHTML = filtrados.map((producto, indice) => `
+        <button class="producto-admin" type="button" data-producto-index="${productos.indexOf(producto)}">
+          <span class="producto-admin-icono" aria-hidden="true">🍽️</span>
+          <span class="producto-admin-info">
+            <strong>${escapeHtml(producto.Producto)}</strong>
+            <small>${escapeHtml(producto.Categoría || 'General')}</small>
+          </span>
+          <span class="producto-admin-datos">
+            <strong>${formatearPrecio(producto.Precio)}</strong>
+            <small class="producto-admin-stock ${producto.Stock <= 3 ? 'stock-bajo' : ''}">${producto.Stock} disponibles</small>
+          </span>
+          <span class="producto-admin-flecha" aria-hidden="true">›</span>
+        </button>
+      `).join('');
+    }
+
+    function abrirProducto(producto = null) {
+      productoEditando = producto;
+      document.getElementById('modalProductoKicker').textContent = producto ? 'Editar producto' : 'Nuevo producto';
+      document.getElementById('modalProductoTitulo').textContent = producto ? 'Editar producto' : 'Agregar producto';
+      document.getElementById('productoNombre').value = producto ? producto.Producto : '';
+      document.getElementById('productoPrecio').value = producto ? producto.Precio : '';
+      document.getElementById('productoStock').value = producto ? producto.Stock : '10';
+      const selectorCategoria = document.getElementById('productoCategoria');
+      const categoriaExistente = String(producto?.Categoría || '').trim().toLocaleLowerCase('es');
+      selectorCategoria.value = producto
+        ? [...selectorCategoria.options].find(opcion => opcion.value.toLocaleLowerCase('es') === categoriaExistente)?.value || 'Otros'
+        : 'Viandas Principales';
+      document.getElementById('avisoProducto').innerHTML = '';
+      modalProducto.hidden = false;
+      document.getElementById('productoNombre').focus();
+    }
+
+    function cerrarProducto() {
+      modalProducto.hidden = true;
+      productoEditando = null;
+    }
+
+    function seleccionarContenido(event) {
+      setTimeout(() => event.target.select(), 0);
+    }
+
+    function mostrarAviso(idArea, texto, tipo) {
+      document.getElementById(idArea).innerHTML = `<div class="aviso aviso-${tipo}">${texto}</div>`;
+      setTimeout(() => { document.getElementById(idArea).innerHTML = ''; }, 3500);
+    }
+
+    formProducto.addEventListener('submit', async event => {
+      event.preventDefault();
+      const nombre = document.getElementById('productoNombre').value.trim();
+      const precio = Number(document.getElementById('productoPrecio').value);
+      const categoria = document.getElementById('productoCategoria').value;
+      const stock = Math.max(0, parseInt(document.getElementById('productoStock').value, 10) || 0);
+
+      if (!nombre || !Number.isFinite(precio) || precio < 0) {
+        mostrarAviso('avisoProducto', 'Completa un nombre y un precio válido.', 'error');
+        return;
+      }
+
+      btnGuardarProducto.disabled = true;
+      btnGuardarProducto.textContent = 'Guardando...';
+      try {
+        const producto = { Producto: nombre, Precio: precio, Categoría: categoria, Stock: stock };
+        const esEdicion = Boolean(productoEditando);
+        const indiceEditado = productoEditando ? productos.indexOf(productoEditando) : -1;
+        const productoAnterior = esEdicion ? { ...productoEditando } : null;
+        const payload = productoEditando
+          ? { modo: 'editar', original: productoEditando.Producto, producto }
+          : { modo: 'agregar', producto };
+        const guardadoPendiente = apiPost('producto', payload, 0);
+        if (esEdicion && indiceEditado >= 0) {
+          productos[indiceEditado] = producto;
+        } else if (!esEdicion) {
+          productos.push(producto);
+        }
+        productos.sort((a, b) => String(a.Producto || '').localeCompare(
+          String(b.Producto || ''),
+          'es',
+          { sensitivity: 'base' }
+        ));
+        guardarCacheJSON(CLAVE_CACHE_MENU, { menu: productos }, TTL_CACHE_MENU);
+        renderProductos();
+        cerrarProducto();
+        void guardadoPendiente.then(resultado => {
+          if (!resultado || resultado.ok !== true) throw new Error('El servidor no confirmó el guardado.');
+          mostrarAviso('avisoLista', esEdicion ? 'Producto actualizado.' : 'Producto agregado.', 'exito');
+        }).catch(err => {
+          const mensaje = String(err && err.message ? err.message : err);
+          const respuestaAmbigua = /tardó demasiado|Failed to fetch|No se pudo conectar/i.test(mensaje);
+          if (!respuestaAmbigua) {
+            if (esEdicion && indiceEditado >= 0) {
+              const indiceActual = productos.indexOf(producto);
+              if (indiceActual >= 0) productos[indiceActual] = productoAnterior;
+            } else if (!esEdicion) {
+              productos = productos.filter(item => item !== producto);
+            }
+            productos.sort((a, b) => String(a.Producto || '').localeCompare(
+              String(b.Producto || ''),
+              'es',
+              { sensitivity: 'base' }
+            ));
+            guardarCacheJSON(CLAVE_CACHE_MENU, { menu: productos }, TTL_CACHE_MENU);
+            renderProductos();
+            mostrarAviso('avisoLista', 'No se pudo guardar: ' + mensaje, 'error');
+            return;
+          }
+        });
+      } catch (err) {
+        mostrarAviso('avisoProducto', 'No se pudo guardar: ' + err.message, 'error');
+      } finally {
+        btnGuardarProducto.disabled = false;
+        btnGuardarProducto.textContent = 'Guardar';
+      }
+    });
+
+    listaProductos.addEventListener('click', event => {
+      const tarjeta = event.target.closest('[data-producto-index]');
+      if (tarjeta) abrirProducto(productos[Number(tarjeta.dataset.productoIndex)]);
+    });
+    buscarProductos.addEventListener('input', renderProductos);
+    document.getElementById('productoPrecio').addEventListener('focus', seleccionarContenido);
+    document.getElementById('productoStock').addEventListener('focus', seleccionarContenido);
+    document.getElementById('btnMostrarAlta').addEventListener('click', () => abrirProducto());
+    document.getElementById('btnCerrarProducto').addEventListener('click', cerrarProducto);
+    document.getElementById('btnCancelarProducto').addEventListener('click', cerrarProducto);
+    modalProducto.addEventListener('click', event => {
+      if (event.target === modalProducto) cerrarProducto();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !modalProducto.hidden) cerrarProducto();
+    });
+
+    function cerrarSesion() {
+      if (confirm('¿Cerrar sesión en este dispositivo?')) {
+        Sesion.cerrar();
+        window.location.href = 'index.html';
+      }
+    }
+
+    iniciarCajonNavegacion();
+    cargarProductos();
+  </script>
+</body>
+</html>

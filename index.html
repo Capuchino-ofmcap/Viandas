@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#B5241D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Viandas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Bienvenida · Viandas Fiesta Familiar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="header" style="justify-content:center; padding-bottom:30px;">
+      <div class="marca" style="text-align:center;">
+        🎉 Viandas Fiesta Familiar
+        <small>Pedidos de la comunidad</small>
+      </div>
+    </div>
+
+    <div class="contenido">
+      <div class="tarjeta">
+        <div class="titulo-seccion">¿Quién hace el pedido?</div>
+        <div class="subtitulo">Elige tu nombre de la lista o escribe uno nuevo si es tu primera vez.</div>
+
+        <div id="avisoArea"></div>
+
+        <div class="campo">
+          <label for="nombreSelect">Tu nombre</label>
+          <select id="nombreSelect">
+            <option value="">Cargando lista...</option>
+          </select>
+        </div>
+
+        <div class="campo" id="campoNuevoNombre" style="display:none;">
+          <label for="nombreNuevo">Escribe tu nombre</label>
+          <input type="text" id="nombreNuevo" placeholder="Ej: María Torres">
+        </div>
+
+        <div class="campo">
+          <label>Forma de pago para esta sesión</label>
+          <div class="opciones-pago">
+            <div class="opcion-pago activa" id="opcionEfectivo" data-valor="efectivo">💵 Efectivo</div>
+            <div class="opcion-pago yape" id="opcionYape" data-valor="yape">📱 Yape / Plin</div>
+          </div>
+        </div>
+
+        <button class="btn btn-primario" id="btnContinuar">Continuar al menú</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    const OTRO_VALOR = '__otro__';
+    const select = document.getElementById('nombreSelect');
+    const campoNuevo = document.getElementById('campoNuevoNombre');
+    const inputNuevo = document.getElementById('nombreNuevo');
+    const avisoArea = document.getElementById('avisoArea');
+    const btnContinuar = document.getElementById('btnContinuar');
+
+    let pagoElegido = Sesion.getPago();
+
+    function marcarPago(valor) {
+      pagoElegido = valor;
+      document.getElementById('opcionEfectivo').classList.toggle('activa', valor === 'efectivo');
+      document.getElementById('opcionYape').classList.toggle('activa', valor === 'yape');
+    }
+    document.getElementById('opcionEfectivo').onclick = () => marcarPago('efectivo');
+    document.getElementById('opcionYape').onclick = () => marcarPago('yape');
+    marcarPago(pagoElegido);
+
+    function mostrarAviso(texto, tipo) {
+      avisoArea.innerHTML = `<div class="aviso aviso-${tipo}">${texto}</div>`;
+    }
+
+    function renderUsuarios(datos, nombreGuardado, ultimoNombre) {
+      const usuariosBase = (datos.usuarios || [])
+        .map(nombre => String(nombre || '').trim())
+        .filter(Boolean);
+
+      const usuariosUnicos = [];
+      const vistos = new Set();
+      usuariosBase.forEach(nombre => {
+        const clave = nombre.toLowerCase();
+        if (!vistos.has(clave)) {
+          vistos.add(clave);
+          usuariosUnicos.push(nombre);
+        }
+      });
+
+      const nombrePrioritario = ultimoNombre && usuariosUnicos.some(n => n.toLowerCase() === ultimoNombre.toLowerCase())
+        ? ultimoNombre
+        : nombreGuardado && usuariosUnicos.some(n => n.toLowerCase() === nombreGuardado.toLowerCase())
+          ? nombreGuardado
+          : null;
+
+      const usuariosOrdenados = nombrePrioritario
+        ? [nombrePrioritario, ...usuariosUnicos.filter(n => n.toLowerCase() !== nombrePrioritario.toLowerCase())]
+        : usuariosUnicos;
+
+      select.innerHTML = '';
+      select.disabled = false;
+      usuariosOrdenados.forEach(nombre => select.appendChild(new Option(nombre, nombre)));
+      select.appendChild(new Option('➕ Soy nuevo / otro nombre', OTRO_VALOR));
+
+      if (nombrePrioritario) {
+        select.value = nombrePrioritario;
+      } else if (nombreGuardado) {
+        select.value = OTRO_VALOR;
+        campoNuevo.style.display = 'block';
+        inputNuevo.value = nombreGuardado;
+      } else if (usuariosOrdenados.length === 0) {
+        select.value = OTRO_VALOR;
+        campoNuevo.style.display = 'block';
+      } else {
+        select.value = usuariosOrdenados[0];
+      }
+    }
+
+    async function cargarNombres() {
+      const nombreGuardado = Sesion.getNombre();
+      const ultimoNombre = Sesion.getUltimoNombre();
+
+      select.innerHTML = '';
+      select.disabled = true;
+      select.appendChild(new Option('Cargando lista...', ''));
+      campoNuevo.style.display = 'none';
+
+      try {
+        const datos = await apiGet('usuarios', {}, 3, null, 0);
+        renderUsuarios(datos, nombreGuardado, ultimoNombre);
+      } catch (err) {
+        select.innerHTML = '';
+        select.disabled = false;
+        const optOtro = document.createElement('option');
+        optOtro.value = OTRO_VALOR;
+        optOtro.textContent = '➕ Escribir mi nombre';
+        select.appendChild(optOtro);
+        select.value = OTRO_VALOR;
+        campoNuevo.style.display = 'block';
+        mostrarAviso('No se pudo cargar la lista de nombres: ' + err.message + '. Puedes escribir el tuyo igual.', 'error');
+      }
+    }
+
+    select.addEventListener('change', () => {
+      campoNuevo.style.display = select.value === OTRO_VALOR ? 'block' : 'none';
+    });
+
+    btnContinuar.addEventListener('click', async () => {
+      let nombreFinal = select.value === OTRO_VALOR ? inputNuevo.value.trim() : select.value;
+
+      if (!nombreFinal) {
+        mostrarAviso('Escribe o elige un nombre para continuar.', 'error');
+        return;
+      }
+
+      btnContinuar.disabled = true;
+      btnContinuar.textContent = 'Guardando...';
+
+      try {
+        if (select.value === OTRO_VALOR) {
+          const respuesta = await apiPost('usuario', { modo: 'crear', nombre: nombreFinal });
+          if (respuesta && respuesta.ok === false) {
+            throw new Error(respuesta.error || 'No se pudo guardar');
+          }
+        }
+        Sesion.setNombre(nombreFinal);
+        Sesion.setPago(pagoElegido);
+        window.location.href = 'menu.html';
+      } catch (err) {
+        const mensaje = err && err.message ? err.message : 'Error desconocido';
+        mostrarAviso('No se pudo guardar tu nombre: ' + mensaje + '. Intenta nuevamente.', 'error');
+        btnContinuar.disabled = false;
+        btnContinuar.textContent = 'Continuar al menú';
+      }
+    });
+
+    cargarNombres();
+  </script>
+</body>
+</html>

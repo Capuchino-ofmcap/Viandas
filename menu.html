@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#B5241D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Viandas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Menú · Viandas Fiesta Familiar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button>
+      <div class="marca">🎉 Viandas <small>Fiesta Familiar</small></div>
+
+      <div class="header-usuario">
+        <div class="usuario-menu-avatar" id="menuUserInitial">?</div>
+        <div class="usuario-menu-texto">
+          <div class="usuario-menu-nombre" id="menuUserName">Invitado</div>
+          <div class="usuario-menu-pago" id="menuUserPay">Pago en efectivo</div>
+        </div>
+      </div>
+
+      <button class="orden-toggle" id="ordenMenu" type="button" aria-label="Ordenar alfabéticamente" title="Ordenar alfabéticamente">A-Z</button>
+    </div>
+
+    <div class="aviso-stock" id="avisoStock" role="status" aria-live="polite"></div>
+
+    <div class="contenido sin-scroll-top">
+      <div id="menuContainer">
+        <div class="cargando">⌛ Cargando menú...</div>
+      </div>
+    </div>
+
+    <div class="barra-inferior">
+      <div class="fila-total">
+        <button class="btn btn-actualizar-stock" id="btnActualizarStock" type="button" onclick="actualizarStockManual()">
+          <span class="stock-flecha" aria-hidden="true">↻</span> Stock
+        </button>
+        <div class="total-resumen">
+          <span class="total-etiqueta">Total</span>
+          <span class="total-monto" id="totalAmount">S/. 0.00</span>
+        </div>
+      </div>
+      <div class="fila-botones">
+        <button class="btn btn-secundario" style="background:transparent; color:white; border-color:rgba(255,255,255,0.5);" onclick="limpiarPedido()">🗑️ Limpiar</button>
+        <button class="btn btn-primario" id="orderBtn" onclick="abrirResumen()" disabled>Realizar pedido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cajón de navegación -->
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-perfil">
+      <div class="drawer-avatar" id="drawerInicial">?</div>
+      <div>
+        <div class="drawer-nombre" id="drawerNombre">Invitado</div>
+        <div class="drawer-pago" id="drawerPago">Pago en efectivo</div>
+        <div class="drawer-etiqueta">Pedidos de hoy</div>
+      </div>
+    </div>
+    <nav class="drawer-nav">
+      <a href="menu.html" class="activo">🍽️ Menú</a>
+      <a href="usuario.html">🔄 Editar nombre / pago</a>
+      <a href="productos.html">🧾 Gestionar productos</a>
+      <a href="resumen.html">📋 Resumen</a>
+      <a href="cambios.html">🔁 Cambios y devoluciones</a>
+      <a href="historial.html">🕘 Historial</a>
+      <a href="reportes.html">📊 Reportes</a>
+    </nav>
+    <div class="drawer-pie">
+      <button class="btn btn-fantasma" style="width:100%; text-align:left;" onclick="cerrarSesion()">Cerrar sesión en este dispositivo</button>
+    </div>
+  </div>
+
+  <!-- Modal de resumen del pedido -->
+  <div class="modal-fondo" id="modalResumen" style="display:none;">
+    <div class="modal-caja">
+      <h3>Confirma tu pedido</h3>
+      <div id="listaResumen"></div>
+      <div class="resumen-total">
+        <span>Total</span>
+        <span id="resumenTotal">S/. 0.00</span>
+      </div>
+      <div class="aviso aviso-info" id="resumenPago" style="margin-top:14px;"></div>
+      <div class="fila-botones" style="margin-top:16px;">
+        <button class="btn btn-secundario" id="btnEditarResumen" onclick="cerrarResumen()">Editar</button>
+        <button class="btn btn-primario" id="btnConfirmarEnvio" onclick="enviarPedido()">Confirmar y enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    exigirSesion();
+
+    let menu = [];
+    let cantidades = [];
+    let stockActualizando = false;
+    let pedidoEnviando = false;
+    let pedidoRespuestaIncierta = false;
+    let backendListo = false;
+    let ordenMenu = 'categorias';
+    let stockColaProcesando = false;
+    let stockColaReintentoProgramado = false;
+    let stockColaReintentos = 0;
+    const VERSION_BACKEND_REQUERIDA = '2026-10-02-sheets-v10-async-stock';
+    const CLAVE_PEDIDO_PENDIENTE = 'viandasFF_pedido_pendiente_v1';
+    const CLAVE_STOCK_PENDIENTE = 'viandasFF_stock_pendiente_v1';
+
+    function firmaPedido(pedido) {
+      return JSON.stringify({
+        usuario: pedido.usuario,
+        formaPago: pedido.formaPago,
+        items: pedido.items.map(item => [item.producto, item.cantidad, item.precio])
+      });
+    }
+
+    function obtenerRequestIdPedido(pedido) {
+      const firma = firmaPedido(pedido);
+      let guardado = null;
+      try {
+        guardado = JSON.parse(localStorage.getItem(CLAVE_PEDIDO_PENDIENTE) || 'null');
+      } catch (_) {}
+      if (guardado && guardado.requestId) {
+        if (guardado.firma !== firma) {
+          throw new Error('Hay un pedido anterior sin confirmación. Se verificará usando el mismo identificador para evitar duplicados.');
+        }
+        guardado.pedido = pedido;
+        try {
+          localStorage.setItem(CLAVE_PEDIDO_PENDIENTE, JSON.stringify(guardado));
+        } catch (_) {}
+        return guardado.requestId;
+      }
+
+      const requestId = 'VTA-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
+      try {
+        localStorage.setItem(CLAVE_PEDIDO_PENDIENTE, JSON.stringify({ firma, requestId, pedido }));
+      } catch (_) {}
+      return requestId;
+    }
+
+    function leerPedidoPendiente() {
+      try {
+        return JSON.parse(localStorage.getItem(CLAVE_PEDIDO_PENDIENTE) || 'null');
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function limpiarRequestIdPedido(requestId) {
+      try {
+        const guardado = JSON.parse(localStorage.getItem(CLAVE_PEDIDO_PENDIENTE) || 'null');
+        if (guardado && guardado.requestId === requestId) localStorage.removeItem(CLAVE_PEDIDO_PENDIENTE);
+      } catch (_) {}
+    }
+
+    function claveProducto(item) {
+      return String(item.Producto || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function mapaCantidadesActuales() {
+      return new Map(menu.map((item, index) => [claveProducto(item), cantidades[index] || 0]));
+    }
+
+    function aplicarMenu(datos, conservarCantidades = true) {
+      const cantidadesPrevias = conservarCantidades ? mapaCantidadesActuales() : new Map();
+      menu = (datos.menu || [])
+        .map(item => ({ ...item, Stock: Math.max(0, Math.floor(Number(item.Stock) || 0)) }))
+        .filter(item => item.Stock > 0);
+      cantidades = menu.map(item => cantidadesPrevias.get(claveProducto(item)) || 0);
+
+      const contenedor = document.getElementById('menuContainer');
+      if (menu.length === 0) {
+        contenedor.innerHTML = '<div class="cargando">⚠️ No hay productos disponibles por ahora.</div>';
+      } else {
+        renderMenu(menu);
+      }
+      actualizarVista();
+    }
+
+    function increase(index) {
+      const item = menu[index];
+      if (!item) return;
+      if (cantidades[index] >= item.Stock) return;
+      cantidades[index]++;
+      actualizarVista();
+      actualizarStockEnPantalla();
+    }
+    function decrease(index) {
+      if (cantidades[index] > 0) cantidades[index]--;
+      actualizarVista();
+      actualizarStockEnPantalla();
+    }
+
+    function actualizarUsuarioVisible() {
+      const nombre = Sesion.getNombre() || 'Invitado';
+      const pago = textoPago(Sesion.getPago());
+
+      const elNombre = document.getElementById('menuUserName');
+      const elPago = document.getElementById('menuUserPay');
+      const elInicial = document.getElementById('menuUserInitial');
+
+      if (elNombre) elNombre.textContent = nombre;
+      if (elPago) elPago.textContent = pago;
+      if (elInicial) elInicial.textContent = (nombre ? nombre[0] : '?').toUpperCase();
+    }
+
+    function actualizarVista() {
+      cantidades.forEach((qty, index) => {
+        const el = document.getElementById(`qty-${index}`);
+        const item = menu[index];
+
+        const cantidadSegura = Math.max(0, qty);
+
+        if (el) el.textContent = cantidadSegura;
+
+        const btnMenos = document.querySelector(`[data-action="decrease"][data-index="${index}"]`);
+        const btnMas = document.querySelector(`[data-action="increase"][data-index="${index}"]`);
+
+        if (btnMenos) btnMenos.disabled = cantidadSegura <= 0;
+        if (btnMas) btnMas.disabled = !item || cantidadSegura >= item.Stock;
+      });
+      const total = cantidades.reduce((suma, qty, i) => suma + (menu[i] ? qty * menu[i].Precio : 0), 0);
+      document.getElementById('totalAmount').textContent = formatoSoles(total);
+      document.getElementById('orderBtn').disabled = total === 0 || !backendListo;
+    }
+
+    function actualizarStockEnPantalla() {
+      menu.forEach((item, index) => {
+        const stockVisual = document.getElementById(`stock-${index}`);
+        const stockRestante = Math.max(0, item.Stock - (cantidades[index] || 0));
+        if (!stockVisual) return;
+        stockVisual.textContent = `Quedan: ${stockRestante}`;
+        stockVisual.classList.toggle('bajo', stockRestante <= 3);
+        stockVisual.classList.toggle('medio', stockRestante > 3 && stockRestante <= 6);
+        stockVisual.classList.toggle('alto', stockRestante > 6);
+      });
+    }
+
+    async function actualizarStockManual() {
+      if (stockActualizando || !menu.length) return;
+      const boton = document.getElementById('btnActualizarStock');
+      stockActualizando = true;
+      if (boton) {
+        boton.disabled = true;
+        boton.innerHTML = '<span class="stock-flecha" aria-hidden="true">↻</span> ...';
+      }
+
+      try {
+        const stockAnterior = new Map(menu.map(item => [claveProducto(item), item.Stock]));
+        const datos = await apiGet('stock', { _ts: Date.now() }, 0, null, 0);
+        if (!datos || !Array.isArray(datos.stock)) {
+          throw new Error('La respuesta del servidor no contiene el stock.');
+        }
+        const stockPorProducto = new Map((datos.stock || []).map(item => [
+          claveProducto(item),
+          Math.max(0, Math.floor(Number(item.Stock) || 0))
+        ]));
+        const menuActual = menu.map(item => ({
+          ...item,
+          Stock: stockPorProducto.get(claveProducto(item)) ?? 0
+        }));
+        const agotados = menuActual.filter(item => {
+          const anterior = stockAnterior.get(claveProducto(item));
+          return anterior > 0 && item.Stock === 0;
+        });
+        const agotadosClaves = new Set(agotados.map(claveProducto));
+        const cantidadesPrevias = mapaCantidadesActuales();
+        menu = menuActual.filter(item => !agotadosClaves.has(claveProducto(item)));
+        cantidades = menu.map(item => cantidadesPrevias.get(claveProducto(item)) || 0);
+        if (menu.length === 0) {
+          document.getElementById('menuContainer').innerHTML =
+            '<div class="cargando">⚠️ No hay productos disponibles por ahora.</div>';
+          actualizarVista();
+        } else {
+          renderMenu(menu);
+          actualizarVista();
+        }
+        if (agotados.length > 0) mostrarAvisoAgotado(agotados);
+      } catch (_) {
+        // La vista conserva el último stock disponible sin mostrar avisos.
+      } finally {
+        stockActualizando = false;
+        if (boton) {
+          boton.disabled = false;
+          boton.innerHTML = '<span class="stock-flecha" aria-hidden="true">↻</span> Stock';
+        }
+      }
+    }
+
+    function mostrarAvisoAgotado(productos) {
+      const aviso = document.getElementById('avisoStock');
+      if (!aviso) return;
+      const nombres = productos.map(item => item.Producto).join(', ');
+      aviso.textContent = productos.length === 1
+        ? `⚠️ ${nombres} se agotó y fue retirado del menú.`
+        : `⚠️ Se agotaron: ${nombres}. Fueron retirados del menú.`;
+      aviso.classList.add('visible');
+      clearTimeout(mostrarAvisoAgotado.timer);
+      mostrarAvisoAgotado.timer = setTimeout(() => aviso.classList.remove('visible'), 5000);
+    }
+
+    function mostrarAvisoStock(texto) {
+      const aviso = document.getElementById('avisoStock');
+      if (!aviso) return;
+      aviso.textContent = texto;
+      aviso.classList.add('visible');
+      clearTimeout(mostrarAvisoStock.timer);
+      mostrarAvisoStock.timer = setTimeout(() => aviso.classList.remove('visible'), 4000);
+    }
+
+    function programarReintentoColaStock(avisarError = false) {
+      if (stockColaReintentoProgramado || stockColaReintentos >= 5) return;
+      stockColaReintentoProgramado = true;
+      const demora = Math.min(30000, 1000 * (2 ** stockColaReintentos));
+      stockColaReintentos += 1;
+      setTimeout(() => {
+        stockColaReintentoProgramado = false;
+        void procesarStockEnSegundoPlano(true, avisarError);
+      }, demora);
+    }
+
+    async function procesarStockEnSegundoPlano(forzar = false, avisarError = false) {
+      if (stockColaProcesando) {
+        try {
+          localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
+        } catch (_) {}
+        programarReintentoColaStock(avisarError);
+        return;
+      }
+      let hayPendienteLocal = false;
+      try {
+        hayPendienteLocal = localStorage.getItem(CLAVE_STOCK_PENDIENTE) === '1';
+      } catch (_) {}
+      if (!forzar && !hayPendienteLocal) return;
+
+      stockColaProcesando = true;
+      try {
+        let procesadosTotal = 0;
+        let colaVacia = false;
+        for (let lote = 0; lote < 10; lote++) {
+          const resultado = await apiPost('procesarStockPendiente', {}, 0);
+          if (!resultado || resultado.ok !== true) {
+            throw new Error((resultado && resultado.error) || 'No se pudo procesar la cola de stock.');
+          }
+          const procesados = Number(resultado.procesados) || 0;
+          if (procesados <= 0) {
+            colaVacia = resultado.colaVacia !== false;
+            break;
+          }
+          procesadosTotal += procesados;
+          if (resultado.colaVacia === true) {
+            colaVacia = true;
+            break;
+          }
+        }
+        try {
+          if (colaVacia) localStorage.removeItem(CLAVE_STOCK_PENDIENTE);
+          else localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
+        } catch (_) {}
+        if (procesadosTotal > 0) await actualizarStockManual();
+        if (colaVacia) stockColaReintentos = 0;
+        else programarReintentoColaStock(avisarError);
+      } catch (_) {
+        try {
+          localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
+        } catch (_) {}
+        programarReintentoColaStock(avisarError);
+      } finally {
+        stockColaProcesando = false;
+      }
+    }
+
+    async function recuperarPedidoPendiente() {
+      if (pedidoEnviando || !backendListo) return false;
+      const pendiente = leerPedidoPendiente();
+      if (!pendiente || !pendiente.pedido || !pendiente.requestId) return false;
+
+      pedidoEnviando = true;
+      try {
+        const resultado = await apiPost('pedido', pendiente.pedido, 0);
+        if (!resultado || resultado.ok !== true) throw new Error((resultado && resultado.error) || 'El servidor aún no confirma el pedido.');
+        limpiarRequestIdPedido(pendiente.requestId);
+        pedidoRespuestaIncierta = false;
+        try {
+          localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
+        } catch (_) {}
+        stockColaReintentos = 0;
+        void procesarStockEnSegundoPlano(false, true);
+        alert('✅ Pedido pendiente confirmado correctamente. No se creó un segundo pedido.');
+        return true;
+      } catch (err) {
+        const mensaje = String(err && err.message ? err.message : err);
+        const rechazoSeguro = /pedido no tiene productos|producto sin nombre|debe ser mayor que cero/i.test(mensaje);
+        if (rechazoSeguro) {
+          limpiarRequestIdPedido(pendiente.requestId);
+          pedidoRespuestaIncierta = false;
+          mostrarAvisoStock('❌ El servidor rechazó el pedido pendiente: ' + mensaje);
+        } else {
+          pedidoRespuestaIncierta = true;
+          mostrarAvisoStock('⚠️ El pedido anterior sigue en verificación. Se conservará el mismo identificador para evitar duplicados.');
+        }
+        return false;
+      } finally {
+        pedidoEnviando = false;
+      }
+    }
+
+    function limpiarPedidoSilencioso() {
+      cantidades.fill(0);
+      document.querySelectorAll('[id^="qty-"]').forEach(el => { el.textContent = '0'; });
+      const totalAmount = document.getElementById('totalAmount');
+      if (totalAmount) totalAmount.textContent = formatoSoles(0);
+      const orderButton = document.getElementById('orderBtn');
+      if (orderButton) orderButton.disabled = true;
+      const listaResumen = document.getElementById('listaResumen');
+      if (listaResumen) listaResumen.innerHTML = '';
+      const resumenTotal = document.getElementById('resumenTotal');
+      if (resumenTotal) resumenTotal.textContent = formatoSoles(0);
+      actualizarVista();
+      const botonConfirmar = document.getElementById('btnConfirmarEnvio');
+      if (botonConfirmar) {
+        botonConfirmar.disabled = false;
+        botonConfirmar.textContent = 'Confirmar y enviar';
+      }
+      const modal = document.getElementById('modalResumen');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function limpiarPedido() {
+      if (cantidades.some(q => q > 0) && !confirm('¿Vaciar el pedido actual?')) return;
+      limpiarPedidoSilencioso();
+    }
+
+    function renderMenu(datos) {
+      const contenedor = document.getElementById('menuContainer');
+      contenedor.innerHTML = '';
+
+      const compararProductos = (a, b) => String(a.Producto || '').localeCompare(
+        String(b.Producto || ''),
+        'es',
+        { sensitivity: 'base' }
+      );
+      const productosOrdenados = [...datos].sort(compararProductos);
+      const categorias = productosOrdenados.reduce((acc, item, index) => {
+        const clave = (item.Categoría || 'General').trim() || 'General';
+        item.index = datos.indexOf(item);
+        (acc[clave] = acc[clave] || []).push(item);
+        return acc;
+      }, {});
+
+      const nombresCategorias = ordenMenu === 'alfabetico'
+        ? ['Todos los productos']
+        : Object.keys(categorias).sort((a, b) => b.localeCompare(a, 'es', { sensitivity: 'base' }));
+
+      if (ordenMenu === 'alfabetico') {
+        categorias['Todos los productos'] = productosOrdenados;
+      }
+
+      for (const nombreCat of nombresCategorias) {
+        const divCat = document.createElement('div');
+        divCat.className = 'categoria';
+
+        let emoji = '🍴';
+        const claveL = nombreCat.toLowerCase();
+        if (claveL.includes('entrada')) emoji = '🥗';
+        else if (claveL.includes('plato')) emoji = '🍗';
+        else if (claveL.includes('postre')) emoji = '🍮';
+        else if (claveL.includes('bebida')) emoji = '🥤';
+
+        divCat.innerHTML = `<div class="categoria-titulo">${emoji} ${nombreCat}</div>`;
+
+        categorias[nombreCat].forEach(item => {
+          const divItem = document.createElement('div');
+          divItem.className = 'item-menu';
+          const stockClase = item.Stock <= 3 ? 'bajo' : item.Stock <= 6 ? 'medio' : 'alto';
+          divItem.innerHTML = `
+            <div class="item-info">
+              <div class="item-nombre-row">
+                <span class="item-nombre">${item.Producto}</span>
+                <span class="item-stock ${stockClase}" id="stock-${item.index}">Quedan: ${item.Stock}</span>
+              </div>
+              <div class="item-precio">${formatoSoles(item.Precio)}</div>
+            </div>
+            <div class="controles-cantidad">
+              <button class="btn-circular" data-action="decrease" data-index="${item.index}" onclick="decrease(${item.index})">−</button>
+              <span class="cantidad" id="qty-${item.index}">0</span>
+              <button class="btn-circular" data-action="increase" data-index="${item.index}" onclick="increase(${item.index})">+</button>
+            </div>`;
+          divCat.appendChild(divItem);
+        });
+        contenedor.appendChild(divCat);
+      }
+    }
+
+    async function cargarMenu(conservarCantidades = true) {
+      backendListo = false;
+      try {
+        const datos = await apiGet('menu', {}, 1, null, 0);
+        backendListo = datos.backend === VERSION_BACKEND_REQUERIDA;
+        if (backendListo) guardarCacheJSON(CLAVE_CACHE_MENU, datos, TTL_CACHE_MENU);
+        aplicarMenu(datos, conservarCantidades);
+        if (!backendListo) {
+          actualizarVista();
+          mostrarAvisoStock('⚠️ Menú cargado. Actualiza Apps Script para habilitar pedidos con protección contra duplicados.');
+          return false;
+        }
+        return true;
+      } catch (err) {
+        backendListo = false;
+        actualizarVista();
+        mostrarAvisoStock('⚠️ ' + err.message);
+        if (menu.length > 0) {
+          return;
+        }
+        document.getElementById('menuContainer').innerHTML =
+          `<div class="cargando">❌ No se pudo cargar el menú.<br>${err.message}</div>`;
+      }
+    }
+
+    document.getElementById('ordenMenu').addEventListener('click', event => {
+      ordenMenu = ordenMenu === 'categorias' ? 'alfabetico' : 'categorias';
+      event.currentTarget.textContent = ordenMenu === 'alfabetico' ? 'Cat.' : 'A-Z';
+      event.currentTarget.setAttribute(
+        'aria-label',
+        ordenMenu === 'alfabetico' ? 'Ordenar por categorías' : 'Ordenar alfabéticamente'
+      );
+      event.currentTarget.title = ordenMenu === 'alfabetico' ? 'Ordenar por categorías' : 'Ordenar alfabéticamente';
+      renderMenu(menu);
+      actualizarVista();
+    });
+
+    // ---- Resumen y envío del pedido ----
+    function construirPedido() {
+      const items = [];
+      let total = 0;
+      cantidades.forEach((qty, i) => {
+        if (qty <= 0 || !menu[i]) return;
+
+        const producto = menu[i];
+        const subtotal = qty * producto.Precio;
+        items.push({ producto: producto.Producto, cantidad: qty, precio: producto.Precio, subtotal });
+        total += subtotal;
+      });
+      return { items, total };
+    }
+
+    function renderResumen(items, total) {
+      const editarBtn = document.getElementById('btnEditarResumen');
+      if (editarBtn) editarBtn.disabled = false;
+
+      document.getElementById('listaResumen').innerHTML = items.map(it =>
+        `<div class="resumen-item"><span>${it.cantidad} × ${it.producto}</span><span>${formatoSoles(it.subtotal)}</span></div>`
+      ).join('');
+      document.getElementById('resumenTotal').textContent = formatoSoles(total);
+
+      const botonConfirmar = document.getElementById('btnConfirmarEnvio');
+      if (botonConfirmar) {
+        botonConfirmar.disabled = items.length === 0;
+        botonConfirmar.textContent = 'Confirmar y enviar';
+      }
+
+      const pago = Sesion.getPago();
+      document.getElementById('resumenPago').textContent =
+        (pago === 'yape' ? '📱 Pago por Yape / Plin' : '💵 Pago en efectivo') + ` — a nombre de ${Sesion.getNombre()}`;
+    }
+
+    function abrirResumen() {
+      if (pedidoEnviando) return;
+      const { items, total } = construirPedido();
+
+      if (items.length === 0) return;
+
+      renderResumen(items, total);
+      document.getElementById('modalResumen').style.display = 'flex';
+
+    }
+
+    function cerrarResumen() {
+      document.getElementById('modalResumen').style.display = 'none';
+    }
+
+    async function enviarPedido() {
+      if (pedidoEnviando) return;
+      if (!backendListo) {
+        mostrarAvisoStock('⚠️ Espera a que se verifique la versión segura del backend antes de enviar.');
+        return;
+      }
+      const { items, total } = construirPedido();
+      const boton = document.getElementById('btnConfirmarEnvio');
+      const editarBtn = document.getElementById('btnEditarResumen');
+      const modal = document.getElementById('modalResumen');
+
+      if (items.length === 0) {
+        renderResumen(items, total);
+        if (modal) modal.style.display = 'flex';
+        return;
+      }
+
+      pedidoEnviando = true;
+      boton.disabled = true;
+      boton.textContent = 'Enviando...';
+      if (editarBtn) editarBtn.disabled = true;
+      if (modal) modal.style.display = 'flex';
+
+      try {
+        const pedidoActual = {
+          usuario: Sesion.getNombre(),
+          formaPago: Sesion.getPago(),
+          items,
+          total
+        };
+        pedidoActual.requestId = obtenerRequestIdPedido(pedidoActual);
+        const resultado = await apiPost('pedido', pedidoActual, 0);
+        if (!resultado || resultado.ok !== true) {
+          throw new Error((resultado && resultado.error) || 'El pedido no fue aceptado.');
+        }
+
+        pedidoRespuestaIncierta = false;
+        limpiarRequestIdPedido(pedidoActual.requestId);
+        try {
+          localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
+        } catch (_) {}
+        void procesarStockEnSegundoPlano(false, true);
+
+        const detalleTicket = pedidoActual.items.map(item =>
+          item.cantidad + ' x ' + item.producto + ' - ' + formatoSoles(item.subtotal)
+        ).join('\n');
+        const totalTicket = formatoSoles(resultado.totalPedido || pedidoActual.total);
+
+        alert(
+          '✅ Pedido registrado correctamente.\n\n' +
+          'Cliente: ' + pedidoActual.usuario + '\n' +
+          'Pago: ' + textoPago(pedidoActual.formaPago) + '\n\n' +
+          detalleTicket + '\n\n' +
+          'TOTAL: ' + totalTicket
+        );
+        limpiarPedidoSilencioso();
+        cerrarResumen();
+        pedidoEnviando = false;
+      } catch (err) {
+        const mensaje = String(err && err.message ? err.message : err);
+        const rechazoSeguro = /pedido no tiene productos|producto sin nombre|debe ser mayor que cero/i.test(mensaje);
+        if (!rechazoSeguro) {
+          pedidoRespuestaIncierta = true;
+          alert('⏳ No llegó la confirmación. Se conservó el pedido y su identificador; al volver a abrir el menú se verificará sin crear duplicados.');
+        } else {
+          const pendiente = leerPedidoPendiente();
+          if (pendiente) limpiarRequestIdPedido(pendiente.requestId);
+          alert('❌ El servidor rechazó el pedido: ' + mensaje);
+        }
+        if (modal) modal.style.display = 'flex';
+        pedidoEnviando = false;
+      } finally {
+        boton.disabled = pedidoEnviando;
+        boton.textContent = pedidoRespuestaIncierta ? 'Reintentar confirmación' : 'Confirmar y enviar';
+        if (editarBtn) editarBtn.disabled = pedidoEnviando || pedidoRespuestaIncierta;
+      }
+    }
+
+    function cerrarSesion() {
+      if (confirm('¿Cerrar sesión en este dispositivo? La próxima vez tendrás que elegir tu nombre de nuevo.')) {
+        Sesion.cerrar();
+        window.location.href = 'index.html';
+      }
+    }
+
+    actualizarUsuarioVisible();
+    iniciarCajonNavegacion();
+    cargarMenu().then(async cargado => {
+      if (!cargado || !backendListo) return;
+      const pedidoRecuperado = await recuperarPedidoPendiente();
+      if (!pedidoRecuperado) void procesarStockEnSegundoPlano(false, false);
+    });
+  </script>
+</body>
+</html>

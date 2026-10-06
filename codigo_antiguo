@@ -1,0 +1,111 @@
+function doPost(e) {
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetName = "Pedidos";
+    var sheet = spreadsheet.getSheetByName(sheetName);
+    
+    // Si no existe la hoja "Pedidos", crearla
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(sheetName);
+      sheet.appendRow(["Fecha", "Hora", "Producto", "Cantidad", "Precio Unit.", "Subtotal", "Total Pedido", "Método Pago"]);
+    } else {
+      // Verificar si existe la columna "Método Pago"
+      var lastCol = sheet.getLastColumn();
+      if (lastCol < 8) {
+        sheet.getRange(1, 8).setValue("Método Pago");
+      }
+    }
+    
+    // Obtener los datos
+    var dataString = e.parameter.data;
+    var data = JSON.parse(dataString);
+    
+    var fecha = new Date();
+    var hora = Utilities.formatDate(fecha, "America/Lima", "HH:mm:ss");
+    var fechaStr = Utilities.formatDate(fecha, "America/Lima", "dd/MM/yyyy");
+    
+    // Determinar método de pago
+    var metodoPago = data.yape ? "YAPE" : "";
+    
+    // Agregar cada producto
+    data.items.forEach(function(item) {
+      sheet.appendRow([
+        fechaStr,
+        hora,
+        item.producto,
+        item.cantidad,
+        item.precio,
+        item.subtotal,
+        data.total,
+        metodoPago
+      ]);
+    });
+    
+    return ContentService.createTextOutput('success');
+    
+  } catch(error) {
+    return ContentService.createTextOutput('error: ' + error.toString());
+  }
+}
+
+/**
+ * Maneja las solicitudes GET (de recuperación de datos) desde la web.
+ * Lee los productos y precios de la hoja "Productos" y los devuelve como JSON.
+ */
+  /**
+ * Lee los productos y precios de la hoja "Productos" y los devuelve como JSON.
+ */
+/**
+ * Lee los productos y precios de la hoja "Productos" y los devuelve como JSON.
+ * El error se corrige asegurando el uso correcto de ContentService.
+ */
+function doGet(e) {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = "Productos";
+    const sheet = spreadsheet.getSheetByName(sheetName);
+
+    if (!sheet) {
+        const errorMsg = { error: `Hoja "${sheetName}" no encontrada.` };
+        return buildJsonResponse(errorMsg); // Usa la función de apoyo
+    }
+
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+
+    if (values.length <= 1) {
+        const errorMsg = { menu: [], error: 'No se encontraron productos en la hoja.' };
+        return buildJsonResponse(errorMsg);
+    }
+
+    const headers = values[0].map(h => h.toString().trim());
+    const dataRows = values.slice(1);
+    
+    const requiredHeaders = ["Producto", "Precio", "Categoría"];
+    if (!requiredHeaders.every(h => headers.includes(h))) {
+        const errorMsg = { error: `Faltan cabeceras requeridas. Asegúrate de tener: ${requiredHeaders.join(', ')}.` };
+        return buildJsonResponse(errorMsg);
+    }
+
+    const menuData = dataRows.map(row => {
+      let item = {};
+      headers.forEach((header, index) => {
+          if (header.toLowerCase() === 'precio') {
+              let priceValue = parseFloat(row[index]);
+              item[header] = isNaN(priceValue) ? 0.00 : priceValue;
+          } else {
+              item[header] = row[index];
+          }
+      });
+      return item;
+    }).filter(item => item.Producto && item.Precio > 0);
+
+    const successMsg = { menu: menuData, success: true };
+    return buildJsonResponse(successMsg); // Usa la función de apoyo
+
+  } catch (error) {
+    const errorMsg = { error: 'Error interno del script: ' + error.toString() };
+    return buildJsonResponse(errorMsg);
+  }
+}
+

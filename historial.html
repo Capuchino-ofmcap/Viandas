@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#B5241D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Viandas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Historial · Viandas Fiesta Familiar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button>
+      <div class="marca" style="font-size:16px;">Historial</div>
+      <a href="menu.html" class="back-link" title="Volver al menú"><span aria-hidden="true">🏠</span> Menú</a>
+    </div>
+
+    <main class="contenido historial-pagina">
+      <div class="productos-cabecera">
+        <div>
+          <div class="titulo-seccion">Últimas operaciones</div>
+          <div class="subtitulo">Consulta las 15 operaciones más recientes, incluyendo cambios y devoluciones.</div>
+        </div>
+      </div>
+      <div id="listaHistorial" class="historial-lista">
+        <div class="cargando">⌛ Cargando historial...</div>
+      </div>
+    </main>
+  </div>
+
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-perfil">
+      <div class="drawer-avatar" id="drawerInicial">?</div>
+      <div>
+        <div class="drawer-nombre" id="drawerNombre">Invitado</div>
+        <div class="drawer-etiqueta">Pedidos de hoy</div>
+      </div>
+    </div>
+    <nav class="drawer-nav">
+      <a href="menu.html">🍽️ Menú</a>
+      <a href="usuario.html">🔄 Cambiar usuario / pago</a>
+      <a href="productos.html">🧾 Gestionar productos</a>
+      <a href="resumen.html">📋 Resumen</a>
+      <a href="cambios.html">🔁 Cambios y devoluciones</a>
+      <a href="historial.html" class="activo">🕘 Historial</a>
+      <a href="reportes.html">📊 Reportes</a>
+    </nav>
+    <div class="drawer-pie">
+      <button class="btn btn-fantasma" style="width:100%; text-align:left;" onclick="cerrarSesion()">Cerrar sesión en este dispositivo</button>
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    exigirSesion();
+    const listaHistorial = document.getElementById('listaHistorial');
+
+    function escapeHtml(valor) {
+      return String(valor ?? '').replace(/[&<>'"]/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[caracter]));
+    }
+
+    function formatearPrecio(precio) {
+      const valor = Number(precio || 0);
+      return (valor < 0 ? '- ' : '') + 'S/. ' + Math.abs(valor).toFixed(2);
+    }
+
+    function formatearFecha(fecha) {
+      const valor = new Date(fecha);
+      if (Number.isNaN(valor.getTime())) return 'Fecha no disponible';
+      return valor.toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    function etiquetaTipo(tipo) {
+      return ({ venta: 'Venta', cambio: 'Cambio', devolucion: 'Devolución', ofrenda: 'Ofrenda' })[tipo] || tipo;
+    }
+
+    function normalizarNombre(nombre) {
+      return String(nombre || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function renderHistorial(operaciones) {
+      if (operaciones.length === 0) {
+        listaHistorial.innerHTML = '<div class="cargando">No hay operaciones registradas.</div>';
+        return;
+      }
+      listaHistorial.innerHTML = operaciones.map(operacion => `
+        <article class="historial-operacion tarjeta">
+          <div class="historial-operacion-cabecera">
+            <div>
+              <strong>${escapeHtml(etiquetaTipo(operacion.tipoMovimiento))}</strong>
+              <span>${escapeHtml(formatearFecha(operacion.fecha))} · ${escapeHtml(operacion.usuario)}</span>
+            </div>
+            <b class="historial-total ${Number(operacion.total) < 0 ? 'historial-total-negativo' : ''}">${formatearPrecio(operacion.total)}</b>
+          </div>
+          <div class="historial-items">
+            ${operacion.items.map(item => `
+              <div class="historial-item">
+                <span>${item.cantidad} × ${escapeHtml(item.producto || 'Ofrenda')}</span>
+                <span>${formatearPrecio(item.subtotal)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </article>
+      `).join('');
+    }
+
+    async function cargarHistorial() {
+      listaHistorial.innerHTML = '<div class="cargando">⌛ Cargando historial...</div>';
+      try {
+        const usuarioActivo = Sesion.getNombre();
+        const datos = await apiGet('historial', { usuario: usuarioActivo }, 1, null, 0);
+        const operacionesPropias = (datos.operaciones || []).filter(operacion =>
+          normalizarNombre(operacion.usuario) === normalizarNombre(usuarioActivo)
+        );
+        renderHistorial(operacionesPropias);
+      } catch (err) {
+        listaHistorial.innerHTML = `<div class="cargando">❌ ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function cerrarSesion() {
+      if (confirm('¿Cerrar sesión en este dispositivo?')) {
+        Sesion.cerrar();
+        window.location.href = 'index.html';
+      }
+    }
+
+    iniciarCajonNavegacion();
+    cargarHistorial();
+  </script>
+</body>
+</html>
