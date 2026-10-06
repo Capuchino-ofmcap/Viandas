@@ -103,7 +103,7 @@ async function apiGet(accion, params = {}, reintentos = 1, cacheKey = null, ttlM
   for (let intento = 0; intento <= reintentos; intento++) {
     const controller = new AbortController();
     const timeoutMs = accion === 'usuarios'
-      ? 15000
+      ? 30000
       : accion === 'resumen' || accion === 'historial' || accion === 'menu' || accion === 'stock'
         ? 30000
         : 10000;

@@ -320,8 +320,10 @@
           actualizarVista();
         }
         if (agotados.length > 0) mostrarAvisoAgotado(agotados);
-      } catch (_) {
-        // La vista conserva el último stock disponible sin mostrar avisos.
+        else mostrarAvisoStock('✅ Stock actualizado correctamente.');
+      } catch (err) {
+        const mensaje = String(err && err.message ? err.message : err);
+        mostrarAvisoStock('❌ No se pudo actualizar el stock: ' + mensaje);
       } finally {
         stockActualizando = false;
         if (boton) {
