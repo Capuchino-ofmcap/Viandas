@@ -256,8 +256,11 @@ function normalizarNombre(nombre) {
 
 function obtenerUsuarios() {
   const hoja = obtenerHoja('Usuarios', ['Nombre', 'FechaRegistro']);
-  const nombres = hoja.getDataRange().getValues().slice(1)
-    .map(f => String(f[0] || '').trim())
+  const ultimaFila = hoja.getLastRow();
+  if (ultimaFila < 2) return [];
+
+  const nombres = hoja.getRange(2, 1, ultimaFila - 1, 1).getValues()
+    .map(fila => String(fila[0] || '').trim())
     .filter(Boolean);
 
   const validos = [];
