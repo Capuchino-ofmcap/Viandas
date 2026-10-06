@@ -240,46 +240,6 @@
       });
     }
 
-    function descontarStockConfirmadoLocal(items) {
-      const cantidadesPorProducto = new Map();
-      items.forEach(item => {
-        const clave = claveProducto({ Producto: item.producto });
-        cantidadesPorProducto.set(clave, (cantidadesPorProducto.get(clave) || 0) + (Number(item.cantidad) || 0));
-      });
-
-      const stockAnterior = new Map(menu.map(item => [claveProducto(item), item.Stock]));
-      const menuActual = menu.map(item => ({
-        ...item,
-        Stock: Math.max(0, item.Stock - (cantidadesPorProducto.get(claveProducto(item)) || 0))
-      }));
-      const agotados = menuActual.filter(item => stockAnterior.get(claveProducto(item)) > 0 && item.Stock === 0);
-      const agotadosClaves = new Set(agotados.map(claveProducto));
-      const cantidadesPrevias = mapaCantidadesActuales();
-      menu = menuActual.filter(item => item.Stock > 0);
-      cantidades = menu.map(item => cantidadesPrevias.get(claveProducto(item)) || 0);
-
-      if (menu.length === 0) {
-        document.getElementById('menuContainer').innerHTML =
-          '<div class="cargando">⚠️ No hay productos disponibles por ahora.</div>';
-        actualizarVista();
-      } else {
-        renderMenu(menu);
-        actualizarVista();
-      }
-      if (agotados.length > 0) mostrarAvisoAgotado(agotados);
-    }
-
-    function enviarPedidoSinEsperar(pedido) {
-      const body = JSON.stringify({ accion: 'pedido', payload: pedido });
-      try {
-        return navigator.sendBeacon(
-          SCRIPT_URL,
-          new Blob([body], { type: 'text/plain;charset=UTF-8' })
-        );
-      } catch (_) {}
-      return false;
-    }
-
     async function actualizarStockManual() {
       if (stockActualizando || !menu.length) return;
       const boton = document.getElementById('btnActualizarStock');
@@ -320,10 +280,8 @@
           actualizarVista();
         }
         if (agotados.length > 0) mostrarAvisoAgotado(agotados);
-        else mostrarAvisoStock('✅ Stock actualizado correctamente.');
-      } catch (err) {
-        const mensaje = String(err && err.message ? err.message : err);
-        mostrarAvisoStock('❌ No se pudo actualizar el stock: ' + mensaje);
+      } catch (_) {
+        // La vista conserva el último stock disponible sin mostrar avisos.
       } finally {
         stockActualizando = false;
         if (boton) {
@@ -625,7 +583,7 @@
       document.getElementById('modalResumen').style.display = 'none';
     }
 
-    function enviarPedido() {
+    async function enviarPedido() {
       if (pedidoEnviando) return;
       if (!backendListo) {
         mostrarAvisoStock('⚠️ Espera a que se verifique la versión segura del backend antes de enviar.');
@@ -648,53 +606,59 @@
       if (editarBtn) editarBtn.disabled = true;
       if (modal) modal.style.display = 'flex';
 
-      let pedidoActual;
       try {
-        pedidoActual = {
+        const pedidoActual = {
           usuario: Sesion.getNombre(),
           formaPago: Sesion.getPago(),
           items,
           total
         };
         pedidoActual.requestId = obtenerRequestIdPedido(pedidoActual);
-        if (!enviarPedidoSinEsperar(pedidoActual)) {
-          limpiarRequestIdPedido(pedidoActual.requestId);
-          throw new Error('El navegador no pudo poner el pedido en cola. Revisa tu conexión e inténtalo de nuevo.');
+        const resultado = await apiPost('pedido', pedidoActual, 0);
+        if (!resultado || resultado.ok !== true) {
+          throw new Error((resultado && resultado.error) || 'El pedido no fue aceptado.');
         }
+
+        pedidoRespuestaIncierta = false;
+        limpiarRequestIdPedido(pedidoActual.requestId);
+        try {
+          localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
+        } catch (_) {}
+        void procesarStockEnSegundoPlano(false, true);
+
+        const detalleTicket = pedidoActual.items.map(item =>
+          item.cantidad + ' x ' + item.producto + ' - ' + formatoSoles(item.subtotal)
+        ).join('\n');
+        const totalTicket = formatoSoles(resultado.totalPedido || pedidoActual.total);
+
+        alert(
+          '✅ Pedido registrado correctamente.\n\n' +
+          'Cliente: ' + pedidoActual.usuario + '\n' +
+          'Pago: ' + textoPago(pedidoActual.formaPago) + '\n\n' +
+          detalleTicket + '\n\n' +
+          'TOTAL: ' + totalTicket
+        );
+        limpiarPedidoSilencioso();
+        cerrarResumen();
+        pedidoEnviando = false;
       } catch (err) {
         const mensaje = String(err && err.message ? err.message : err);
-        pedidoRespuestaIncierta = /Hay un pedido anterior sin confirmación/i.test(mensaje);
-        alert('❌ No se pudo enviar el pedido: ' + mensaje);
+        const rechazoSeguro = /pedido no tiene productos|producto sin nombre|debe ser mayor que cero/i.test(mensaje);
+        if (!rechazoSeguro) {
+          pedidoRespuestaIncierta = true;
+          alert('⏳ No llegó la confirmación. Se conservó el pedido y su identificador; al volver a abrir el menú se verificará sin crear duplicados.');
+        } else {
+          const pendiente = leerPedidoPendiente();
+          if (pendiente) limpiarRequestIdPedido(pendiente.requestId);
+          alert('❌ El servidor rechazó el pedido: ' + mensaje);
+        }
         if (modal) modal.style.display = 'flex';
         pedidoEnviando = false;
-        boton.disabled = false;
+      } finally {
+        boton.disabled = pedidoEnviando;
         boton.textContent = pedidoRespuestaIncierta ? 'Reintentar confirmación' : 'Confirmar y enviar';
-        if (editarBtn) editarBtn.disabled = pedidoRespuestaIncierta;
-        return;
+        if (editarBtn) editarBtn.disabled = pedidoEnviando || pedidoRespuestaIncierta;
       }
-
-      pedidoRespuestaIncierta = false;
-      limpiarRequestIdPedido(pedidoActual.requestId);
-      try {
-        localStorage.removeItem(CLAVE_STOCK_PENDIENTE);
-      } catch (_) {}
-      const detalleTicket = pedidoActual.items.map(item =>
-        item.cantidad + ' x ' + item.producto + ' - ' + formatoSoles(item.subtotal)
-      ).join('\n');
-      alert(
-        '✅ Pedido enviado.\n\n' +
-        'Cliente: ' + pedidoActual.usuario + '\n' +
-        'Pago: ' + textoPago(pedidoActual.formaPago) + '\n\n' +
-        detalleTicket + '\n\n' +
-        'TOTAL: ' + formatoSoles(pedidoActual.total)
-      );
-      descontarStockConfirmadoLocal(pedidoActual.items);
-      limpiarPedidoSilencioso();
-      cerrarResumen();
-      pedidoEnviando = false;
-      boton.disabled = false;
-      boton.textContent = 'Confirmar y enviar';
-      if (editarBtn) editarBtn.disabled = false;
     }
 
     function cerrarSesion() {
