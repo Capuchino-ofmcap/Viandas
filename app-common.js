@@ -37,9 +37,12 @@ function guardarCacheJSON(clave, data, ttlMs = 300000) {
   }
 }
 
-function conTimeout(promise, ms, mensaje) {
+function conTimeout(promise, ms, mensaje, alVencer = null) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(mensaje)), ms);
+    const timer = setTimeout(() => {
+      if (alVencer) alVencer();
+      reject(new Error(mensaje));
+    }, ms);
     promise.then(
       value => {
         clearTimeout(timer);
@@ -98,11 +101,18 @@ async function apiGet(accion, params = {}, reintentos = 1, cacheKey = null, ttlM
   const cacheFallback = cacheKey ? leerCacheJSON(cacheKey, ttlMs) : null;
 
   for (let intento = 0; intento <= reintentos; intento++) {
+    const controller = new AbortController();
+    const timeoutMs = accion === 'usuarios'
+      ? 15000
+      : accion === 'resumen' || accion === 'historial' || accion === 'menu' || accion === 'stock'
+        ? 30000
+        : 10000;
     try {
       const res = await conTimeout(
-        fetch(url.toString(), { cache: 'no-store' }),
-        accion === 'resumen' || accion === 'historial' || accion === 'menu' || accion === 'stock' ? 30000 : 10000,
-        'La respuesta de la lista tardó demasiado.'
+        fetch(url.toString(), { cache: 'no-store', signal: controller.signal }),
+        timeoutMs,
+        'La respuesta de la lista tardó demasiado.',
+        () => controller.abort()
       );
 
       if (!res.ok) throw new Error('No se pudo conectar (HTTP ' + res.status + ')');
@@ -211,11 +221,4 @@ function iniciarCajonNavegacion() {
 
 function formatoSoles(numero) {
   return 'S/. ' + Number(numero || 0).toFixed(2);
-}
-
-if ('serviceWorker' in navigator && window.isSecureContext) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .catch(error => console.warn('No se pudo registrar la app instalable.', error));
-  });
 }

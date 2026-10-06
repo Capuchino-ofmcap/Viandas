@@ -29,15 +29,6 @@ Archivos incluidos:
 El punto de entrada para tus usuarios ahora es `bienvenida.html` (o puedes renombrarlo a
 `index.html` si tu hosting espera ese nombre exacto).
 
-### Instalar en el celular
-
-La app incluye `manifest.webmanifest`, `sw.js` y los iconos PNG. Sube también estos archivos a la misma carpeta del hosting. La instalación requiere que el sitio esté publicado con HTTPS.
-
-- Android: abre el sitio en Chrome, toca el menú ⋮ y elige **Instalar app** o **Agregar a pantalla principal**.
-- iPhone: abre el sitio en Safari, toca **Compartir** y elige **Agregar a pantalla de inicio**.
-
-Al abrirla desde el icono instalado, se muestra como app y no como pestaña del navegador. La interfaz puede abrirse desde caché, pero los pedidos y cambios requieren conexión para comunicarse con Apps Script.
-
 La URL de tu Apps Script ya está puesta dentro de `app-common.js`, en la constante `SCRIPT_URL`.
 Si alguna vez vuelves a implementar el backend como una implementación *nueva* (no como
 nueva versión), esa URL cambia y hay que actualizarla ahí.

@@ -81,7 +81,23 @@ function doPost(e) {
     const accion = cuerpo.accion || cuerpo.action || cuerpo.tipo;
     const datos = cuerpo.payload || cuerpo.data || {};
 
-    if (accion === 'pedido') return salidaJSON(registrarPedido(datos));
+    if (accion === 'pedido') {
+      const resultado = registrarPedido(datos);
+      if (resultado && resultado.ok) {
+        let estadoStock = { ok: true, colaVacia: false };
+        for (let lote = 0; lote < 10; lote++) {
+          estadoStock = procesarColaStock();
+          if (!estadoStock || estadoStock.ok !== true || estadoStock.colaVacia === true) break;
+        }
+        resultado.stockPendiente = !estadoStock || estadoStock.ok !== true || estadoStock.colaVacia !== true;
+        if (!estadoStock || estadoStock.ok !== true) {
+          resultado.stockError = estadoStock && estadoStock.error
+            ? estadoStock.error
+            : 'No se pudo confirmar la actualización del stock.';
+        }
+      }
+      return salidaJSON(resultado);
+    }
     if (accion === 'usuario') return salidaJSON(registrarUsuario(datos));
     if (accion === 'producto') return salidaJSON(guardarProducto(datos));
     if (accion === 'ajuste') return salidaJSON(registrarAjuste(datos));
