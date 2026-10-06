@@ -105,6 +105,8 @@
     let menu = [];
     let cantidades = [];
     let stockActualizando = false;
+    let stockActualizacionPendiente = false;
+    let revisionStock = 0;
     let pedidoEnviando = false;
     let pedidoRespuestaIncierta = false;
     let backendListo = false;
@@ -246,18 +248,33 @@
       });
     }
 
-    async function actualizarStockManual() {
-      if (stockActualizando || !menu.length) return;
+    function actualizarIndicadorStock() {
       const boton = document.getElementById('btnActualizarStock');
-      stockActualizando = true;
-      if (boton) {
-        boton.disabled = true;
-        boton.innerHTML = '<span class="stock-flecha" aria-hidden="true">↻</span> ...';
+      if (!boton) return;
+      const ocupado = stockActualizando || stockColaProcesando;
+      boton.disabled = ocupado;
+      boton.innerHTML = ocupado
+        ? '<span class="stock-flecha" aria-hidden="true">↻</span> ...'
+        : '<span class="stock-flecha" aria-hidden="true">↻</span> Stock';
+    }
+
+    async function actualizarStockManual() {
+      if (!menu.length) return;
+      if (stockActualizando) {
+        stockActualizacionPendiente = true;
+        return;
       }
+      const revisionSolicitud = revisionStock;
+      stockActualizando = true;
+      actualizarIndicadorStock();
 
       try {
         const stockAnterior = new Map(menu.map(item => [claveProducto(item), item.Stock]));
         const datos = await apiGet('stock', { _ts: Date.now() }, 0, null, 0);
+        if (revisionSolicitud !== revisionStock) {
+          stockActualizacionPendiente = true;
+          return;
+        }
         if (!datos || !Array.isArray(datos.stock)) {
           throw new Error('La respuesta del servidor no contiene el stock.');
         }
@@ -290,9 +307,10 @@
         // La vista conserva el último stock disponible sin mostrar avisos.
       } finally {
         stockActualizando = false;
-        if (boton) {
-          boton.disabled = false;
-          boton.innerHTML = '<span class="stock-flecha" aria-hidden="true">↻</span> Stock';
+        actualizarIndicadorStock();
+        if (stockActualizacionPendiente) {
+          stockActualizacionPendiente = false;
+          void actualizarStockManual();
         }
       }
     }
@@ -344,6 +362,7 @@
       if (!forzar && !hayPendienteLocal) return;
 
       stockColaProcesando = true;
+      actualizarIndicadorStock();
       try {
         let procesadosTotal = 0;
         let colaVacia = false;
@@ -367,7 +386,10 @@
           if (colaVacia) localStorage.removeItem(CLAVE_STOCK_PENDIENTE);
           else localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
         } catch (_) {}
-        if (procesadosTotal > 0) await actualizarStockManual();
+        if (procesadosTotal > 0) {
+          revisionStock += 1;
+          await actualizarStockManual();
+        }
         if (colaVacia) stockColaReintentos = 0;
         else programarReintentoColaStock(avisarError);
       } catch (_) {
@@ -377,6 +399,7 @@
         programarReintentoColaStock(avisarError);
       } finally {
         stockColaProcesando = false;
+        actualizarIndicadorStock();
       }
     }
 
@@ -630,7 +653,6 @@
         try {
           localStorage.setItem(CLAVE_STOCK_PENDIENTE, '1');
         } catch (_) {}
-        void procesarStockEnSegundoPlano(false, true);
 
         const detalleTicket = pedidoActual.items.map(item =>
           item.cantidad + ' x ' + item.producto + ' - ' + formatoSoles(item.subtotal)
@@ -647,6 +669,7 @@
         limpiarPedidoSilencioso();
         cerrarResumen();
         pedidoEnviando = false;
+        void procesarStockEnSegundoPlano(false, true);
       } catch (err) {
         const mensaje = String(err && err.message ? err.message : err);
         const rechazoSeguro = /pedido no tiene productos|producto sin nombre|debe ser mayor que cero/i.test(mensaje);
